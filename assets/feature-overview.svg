@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="650" viewBox="0 0 1080 650" role="img" aria-labelledby="title description">
+  <title id="title">GitHub Agent Identities</title>
+  <desc id="description">Open-source ChatGPT / Codex plugin. One plugin. Multiple conversations. Distinct GitHub identities. Four features: Chat recognition—Identify each calling conversation; Identity picker—Bind a chat to a GitHub App; Scoped access—Use GitHub App permissions; Bot attribution—PRs, reviews and comments under the right bot.</desc>
+  <rect x="1" y="1" width="1078" height="648" rx="24" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/>
+  <rect x="36" y="34" width="78" height="78" rx="20" fill="#E0E7FF"/>
+  <g fill="none" stroke="#4338CA" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="61" cy="62" r="6"/><circle cx="88" cy="83" r="6"/><circle cx="88" cy="52" r="6"/>
+    <path d="M61 68v20a11 11 0 0 0 11 11h10M61 62V52h21M61 71a21 21 0 0 0 21 12"/>
+  </g>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" fill="#0F172A">
+    <text x="134" y="68" font-weight="750" font-size="40">GitHub Agent Identities</text>
+    <text x="136" y="103" fill="#64748B" font-size="20">Open-source ChatGPT / Codex plugin</text>
+    <text x="37" y="183" font-weight="700" font-size="27">One plugin. Multiple conversations. Distinct GitHub identities.</text>
+  </g>
+  <g>
+    <rect x="36" y="226" width="488" height="171" rx="19" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect x="556" y="226" width="488" height="171" rx="19" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect x="36" y="418" width="488" height="171" rx="19" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect x="556" y="418" width="488" height="171" rx="19" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.5"/>
+  </g>
+  <g fill="none" stroke="#2563EB" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- fingerprint -->
+    <path d="M92 273c-17 0-29 12-29 28"/><path d="M121 301c0-17-13-29-29-29"/><path d="M76 301c0-9 7-16 16-16s16 7 16 16c0 20-5 32-10 39"/><path d="M88 302c0 18-1 29-6 38"/><path d="M63 311c0 12-2 22-5 28"/><path d="M119 312c-1 14-4 23-9 30"/>
+    <!-- selector -->
+    <rect x="584" y="270" width="55" height="53" rx="8"/><path d="M597 284h25M597 297h14M597 310h22"/><path d="m630 294 5 5 9-12"/>
+    <!-- shield-check -->
+    <path d="M92 456 119 467v18c0 21-13 33-27 40-14-7-27-19-27-40v-18z"/><path d="m78 487 10 10 20-21"/>
+    <!-- comment -->
+    <path d="M593 462h43a10 10 0 0 1 10 10v28a10 10 0 0 1-10 10h-24l-17 13v-13h-2a10 10 0 0 1-10-10v-28a10 10 0 0 1 10-10z"/><path d="M596 480h36M596 492h24"/>
+  </g>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+    <text x="150" y="298" font-size="26" font-weight="700" fill="#0F172A">Chat recognition</text>
+    <text x="150" y="333" font-size="19" fill="#475569">Identify each calling conversation</text>
+    <text x="670" y="298" font-size="26" font-weight="700" fill="#0F172A">Identity picker</text>
+    <text x="670" y="333" font-size="19" fill="#475569">Bind a chat to a GitHub App</text>
+    <text x="150" y="490" font-size="26" font-weight="700" fill="#0F172A">Scoped access</text>
+    <text x="150" y="525" font-size="19" fill="#475569">Use GitHub App permissions</text>
+    <text x="670" y="490" font-size="26" font-weight="700" fill="#0F172A">Bot attribution</text>
+    <text x="670" y="525" font-size="18" fill="#475569">PRs, reviews and comments</text>
+    <text x="670" y="549" font-size="18" fill="#475569">under the right bot</text>
+  </g>
+</svg>
