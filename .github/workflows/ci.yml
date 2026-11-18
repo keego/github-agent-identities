@@ -14,15 +14,6 @@ jobs:
         with:
           node-version: '22'
       - name: Install dependencies
-        run: npm install --no-audit --no-fund 2>&1 | tee "$GITHUB_WORKSPACE/npm-install.log"
+        run: npm install --no-audit --no-fund
       - name: Typecheck and unit tests
-        run: npm run check 2>&1 | tee "$GITHUB_WORKSPACE/check.log"
-      - name: Upload CI diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-diagnostics
-          path: |
-            npm-install.log
-            check.log
-          if-no-files-found: ignore
+        run: npm run check
