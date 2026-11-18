@@ -73,3 +73,20 @@ jobs:
         # --force ONLY bypasses API-created Worker conflict after explicit approval.
         # --no-provision still prohibits silently creating new D1 resources.
         run: npx cf deploy --mode staging --no-provision --force --message 'Approved one-time API bootstrap takeover'
+      - name: Confirm anonymous requests are blocked by Cloudflare Access
+        # This is an edge-level check from a fresh CI runner: no cookie/token.
+        # Fail if /health returns a public 2xx, and fail on network errors.
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://${MCP_PUBLIC_HOSTNAME}/health"
+          code="$(curl --silent --show-error --max-time 25 --connect-timeout 10 --output /dev/null --write-out '%{http_code}' "$url")"
+          if [[ "$code" =~ ^2[0-9][0-9]$ ]]; then
+            echo '::error::Anonymous /health is accessible; Access policy must protect the entire Worker'
+            exit 1
+          fi
+          if [[ "$code" == '000' ]]; then
+            echo '::error::Staging /health could not be reached; cannot verify Access boundary'
+            exit 1
+          fi
+          echo "Anonymous staging health request denied by Access (HTTP $code)"

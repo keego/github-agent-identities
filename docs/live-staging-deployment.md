@@ -35,7 +35,9 @@ This project has a **manual-only** workflow, [`.github/workflows/deploy-staging.
 4. From **Actions → Deploy private MCP staging (manual) → Run workflow**, choose **`main`**. **On the first run replacing the known 503-only bootstrap**, select **`takeover_api_bootstrap` = true** (check the box). This adds `--force` only for that explicitly approved first takeover. Leave the box **unchecked on all future deployments**, which use the normal, conflict-protected deployment path. The job rejects missing variables, runs all tests and a Worker build, and always retains `--no-provision` so it cannot silently create a second database. It explicitly forces `GH_APP_READONLY_ENABLED=false`, leaving GitHub read and write tools absent.
 5. Once the workflow succeeds, open the staging `https://<worker-host>/health` behind Access. Complete the invited-user sign-in. An authenticated health check should return `healthy`; unauthenticated requests should encounter an Access authentication challenge.
 6. Connect a **custom MCP server** in ChatGPT using `https://<worker-host>/mcp` and authenticate via Cloudflare Access Managed OAuth. Inspect `list_identities`, `identify_chat` and `get_my_tenant_id`. The identity list is expected to be **empty** until an operator registers App identities in D1.
-7. Check an uninvited account, missing/expired token, and cross-session isolation. Do **not** mark [Issue #16](https://github.com/keego/github-agent-identities/issues/16) complete until a real ChatGPT connection works.
+7. The workflow also performs a **credential-free HTTP probe** of the deployed `/health` route. Access must deny an anonymous request (HTTP 302/401/403 rather than 2xx); an unexpectedly public health route **fails the deploy job**. This is an edge-policy check, not a logged-in OAuth test.
+8. Verify Cloudflare Worker **version/preview URLs remain disabled** (`previewUrls: false` in `cloudflare.config.ts`), or there could be an alternative hostname outside the Access policy.
+9. Check an uninvited account, missing/expired token, and cross-session isolation. Do **not** mark [Issue #16](https://github.com/keego/github-agent-identities/issues/16) complete until a real ChatGPT connection works.
 
 ### No production token / GitHub App key required yet
 
@@ -44,6 +46,7 @@ Only the Cloudflare *deployment* API token is needed for this workflow. The GitH
 ### Rollback / safety
 
 - `cf deploy --no-provision` refuses to create missing resources rather than silently provisioning replacements.
+- **Preview routes:** `cloudflare.config.ts` explicitly sets `previewUrls: false`; the deployment smoke check must also ensure anonymous health access is denied at the main hostname. Do not turn off the Access policy for debugging.
 - **One-time takeover risk:** `--force` deliberately overrides the old API-managed bootstrap Worker code/config with the reviewed Git-backed staging build. Before selecting the takeover checkbox, confirm the remote Worker is `github-agent-identities-staging`, it still has only the expected staging D1 binding, and the Cloudflare Access owner-only application remains active. Do not select takeover mode for normal deployments or other Workers. The first takeover does not bypass Cloudflare Access, tests or `--no-provision`.
 - This workflow uses the existing `github-agent-identities-staging` Worker name; it does **not** deploy to production, alter the existing Roommate Ledger/Homelab Access apps, or make the endpoint publicly usable.
 - The Cloudflare Access policy is configured independently from the Worker bundle. On a bad build, use Cloudflare Worker version rollback in the dashboard. **Do not remove Access protection** to troubleshoot.
