@@ -2,6 +2,12 @@ name: Deploy private MCP staging (manual)
 
 on:
   workflow_dispatch:
+    inputs:
+      takeover_api_bootstrap:
+        description: 'One-time only: explicitly replace the existing API-created 503-only staging bootstrap'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,6 +21,8 @@ jobs:
     name: Validate and deploy access-protected staging
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Manual workflows on feature branches must not receive deployment credentials.
+    if: github.ref == 'refs/heads/main'
     environment: staging
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -57,5 +65,11 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Run complete QA before deploying
         run: npm run qa:local
-      - name: Deploy preexisting staging Worker and D1 (no provision)
+      - name: Deploy staging Worker (normal, no provision)
+        if: ${{ !inputs.takeover_api_bootstrap }}
         run: npx cf deploy --mode staging --no-provision --message 'Private staging OAuth verification'
+      - name: One-time takeover of API-created staging bootstrap
+        if: ${{ inputs.takeover_api_bootstrap }}
+        # --force ONLY bypasses API-created Worker conflict after explicit approval.
+        # --no-provision still prohibits silently creating new D1 resources.
+        run: npx cf deploy --mode staging --no-provision --force --message 'Approved one-time API bootstrap takeover'
