@@ -94,6 +94,21 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     },
   );
 
+  // Operators need this opaque, signed-principal-derived tenant ID to
+  // register GitHub Apps in D1 without storing raw JWTs or personal emails.
+  if (trustedTenantId) {
+    server.registerTool(
+      "get_my_tenant_id",
+      {
+        title: "Get my authenticated tenant ID",
+        description: "Return the verified tenant identifier for private GitHub App onboarding.",
+        inputSchema: z.object({}),
+        annotations: { readOnlyHint: true },
+      },
+      async () => result({ ok: true, tenantId: trustedTenantId }),
+    );
+  }
+
   if (github && trustedTenantId) registerGitHubReadTools(server, github, trustedTenantId);
   return server;
 }
