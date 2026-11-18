@@ -93,7 +93,7 @@ export class IdentityRouter {
   async bind(meta: ClientMetadata, identityId: string, tenantId?: string) {
     const identity = this.identities.get(identityId);
     if (!identity) throw new IdentityError("IDENTITY_NOT_FOUND");
-    const { key, fingerprint } = await getChatIdentity(meta);
+    const { key, fingerprint } = await getChatIdentity(meta, tenantId);
     await this.store.write(key, identity.id);
     return { registered: true, fingerprint, identity };
   }
