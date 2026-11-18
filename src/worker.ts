@@ -16,6 +16,8 @@ import { type JWTVerifyGetKey } from "jose";
 import { D1BindingStore, type SqlDatabase } from "./d1-store.ts";
 import { D1AppRegistry } from "./github-apps.ts";
 import { createTenantRouter } from "./tenant-router.ts";
+import { InstallationTokenProvider } from "./github-auth.ts";
+import { GitHubOperations } from "./github-operations.ts";
 import { createIdentityMcpServer } from "./server.ts";
 import { accessSettings, authenticateAccess } from "./access-auth.ts";
 
@@ -26,6 +28,10 @@ export type WorkerEnv = {
   ACCESS_ISSUER?: string;
   ACCESS_AUDIENCE?: string;
   ALLOWED_ACCESS_EMAILS?: string;
+  /** Opt-in read-only GitHub App tools; false by default. */
+  GH_APP_READONLY_ENABLED?: string;
+  /** Cloudflare secret bindings selected by operator-owned D1 registry. */
+  [secretBindingName: string]: unknown;
   /** Deprecated POC switch: intentionally ignored in the private Worker. */
   ENABLE_UNAUTHENTICATED_DEMO?: string;
 };
@@ -77,8 +83,22 @@ export async function handlePrivateWorker(
     // Schema errors and DB availability problems must not leak internals.
     return denied(503, "STORAGE_UNAVAILABLE");
   }
+  // A positive operator opt-in is required before loading App secrets.
+  // This stage exposes PR reads only, never comments/PR writes.
+  const registry = new D1AppRegistry(env.DB);
+  const readOnlyGitHub = env.GH_APP_READONLY_ENABLED === "true"
+    ? new GitHubOperations(
+      router,
+      registry,
+      new InstallationTokenProvider(async reference => {
+        if (!/^GH_APP_[A-Z0-9_]+_PRIVATE_KEY$/.test(reference)) return null;
+        const secret = env[reference];
+        return typeof secret === "string" && secret.length > 0 ? secret : null;
+      }),
+    )
+    : undefined;
   const handler = createMcpHandler(
-    () => createIdentityMcpServer(router, undefined, tenantId),
+    () => createIdentityMcpServer(router, readOnlyGitHub, tenantId),
     { responseMode: "json" },
   );
   return handler.fetch(request);
