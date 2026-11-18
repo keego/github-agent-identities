@@ -27,6 +27,8 @@ export default defineConfig(({ mode }) => {
         ACCESS_ISSUER: bindings.text(process.env.ACCESS_ISSUER || ""),
         ACCESS_AUDIENCE: bindings.text(process.env.ACCESS_AUDIENCE || ""),
         ALLOWED_ACCESS_EMAILS: bindings.text(process.env.ALLOWED_ACCESS_EMAILS || ""),
+        // Must be explicitly enabled after authenticated staging and App setup.
+        GH_APP_READONLY_ENABLED: bindings.text(process.env.GH_APP_READONLY_ENABLED === "true" ? "true" : "false"),
       },
     },
   };

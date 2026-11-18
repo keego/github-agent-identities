@@ -45,6 +45,11 @@ function fakeDatabase(): WorkerEnv["DB"] {
             const id = bindings.get(String(values[0]));
             return (id ? { identity_id: id } : null) as T | null;
           }
+          if (sql.includes("github_app_identities")) {
+            const row = (apps[String(values[0])] ?? [])
+              .find(identity => identity.identity_id === String(values[1]));
+            return (row ?? null) as T | null;
+          }
           throw new Error("Unexpected first query");
         },
         async all<T>(): Promise<{ results: T[] }> {
@@ -151,6 +156,15 @@ test("two invited humans get tenant-specific identity lists and independent chat
     assert.deepEqual(aList.identities?.map(item => item.id), ["design"]);
     assert.deepEqual(bList.identities?.map(item => item.id), ["qa"]);
 
+    // Tenant IDs are only available *after* authentication, and cannot be
+    // supplied by clients. They allow secure private App registry onboarding.
+    const aAccount = await alice.client.callTool({ name: "get_my_tenant_id", arguments: {} });
+    const bAccount = await bob.client.callTool({ name: "get_my_tenant_id", arguments: {} });
+    const aTenant = JSON.parse(aAccount.content?.[0]?.type === "text" ? aAccount.content[0].text : "{}");
+    const bTenant = JSON.parse(bAccount.content?.[0]?.type === "text" ? bAccount.content[0].text : "{}");
+    assert.equal(aTenant.tenantId, "cloudflare-access:alice-id");
+    assert.equal(bTenant.tenantId, "cloudflare-access:bob-id");
+
     const aBind = parse(await alice.client.callTool({
       name: "bind_identity", arguments: { identityId: "design" }, _meta: meta,
     }));
@@ -187,4 +201,67 @@ test("signed uninvited user cannot obtain identity list or bind a session", asyn
   const stranger = clientFor(await token("stranger-id", "stranger@example.net"));
   await assert.rejects(stranger.client.connect(stranger.transport));
   await stranger.client.close();
+});
+
+
+test("GitHub App reads are opt-in and never expose comment writes", async () => {
+  const { token, clientFor, env } = await setup();
+  env.GH_APP_READONLY_ENABLED = "true";
+  const alice = clientFor(await token("alice-id", "alice@example.com"));
+  const metadata = {
+    "openai/subject": "same-user",
+    "openai/session": "pilot-session",
+    "tenantId": "cloudflare-access:bob-id", // spoofed, must be ignored
+  };
+
+  try {
+    await alice.client.connect(alice.transport);
+    const available = await alice.client.listTools();
+    assert.equal(available.tools.some(tool => tool.name === "github_get_pull_request"), true);
+    assert.equal(available.tools.some(tool => tool.name === "github_comment_on_pr"), false);
+
+    // An unbound chat cannot perform any GitHub action, regardless of tenant metadata.
+    const unbound = await alice.client.callTool({
+      name: "github_get_pull_request",
+      arguments: { repository: "keego/poster-brain", number: 1 },
+      _meta: metadata,
+    });
+    assert.equal(unbound.isError, true);
+
+    const bound = await alice.client.callTool({
+      name: "bind_identity",
+      arguments: { identityId: "design" }, _meta: metadata,
+    });
+    assert.equal(bound.isError, undefined);
+
+    // Repo allowlist check happens before any GitHub token request.
+    const forbidden = await alice.client.callTool({
+      name: "github_get_pull_request",
+      arguments: { repository: "keego/not-authorized", number: 1 }, _meta: metadata,
+    });
+    assert.equal(forbidden.isError, true);
+    assert.match(forbidden.content?.[0]?.type === "text" ? forbidden.content[0].text : "",
+      /REPOSITORY_NOT_ALLOWED/);
+
+    // Deliberately no PEM secret: no real GitHub HTTP request can happen.
+    const noSecret = await alice.client.callTool({
+      name: "github_get_pull_request",
+      arguments: { repository: "keego/poster-brain", number: 1 }, _meta: metadata,
+    });
+    assert.equal(noSecret.isError, true);
+    assert.equal(available.tools.some(tool => tool.name === "github_comment_on_pr"), false);
+  } finally {
+    await alice.client.close();
+  }
+});
+
+test("GitHub-read opt-in never permits unauthenticated access", async () => {
+  const { env, resolver } = await setup();
+  env.GH_APP_READONLY_ENABLED = "true";
+  const response = await handlePrivateWorker(
+    new Request("https://private.example.workers.dev/mcp", {
+      method: "POST", headers: { Host: "private.example.workers.dev" },
+    }), env, resolver,
+  );
+  assert.equal(response.status, 401);
 });
