@@ -1,6 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { conversationMetadata } from "./request-context.ts";
-import { verifiedTenantFromContext } from "./verified-tenant.ts";
 import * as z from "zod/v4";
 import {
   GitHubOperations,
@@ -8,11 +7,14 @@ import {
   type VerifiedCaller,
 } from "./github-operations.ts";
 
-function callerFromExtra(extra: unknown): VerifiedCaller | null {
-  const tenantId = verifiedTenantFromContext(extra);
+/**
+ * A verified human tenant MUST be supplied by the hosting auth boundary.
+ * Tool parameters, request metadata and OAuth clientId never define a user.
+ */
+function callerFromExtra(extra: unknown, verifiedTenantId: string): VerifiedCaller | null {
   const metadata = conversationMetadata(extra);
-  if (!tenantId || !metadata) return null;
-  return { tenantId, metadata };
+  if (!verifiedTenantId || !metadata) return null;
+  return { tenantId: verifiedTenantId, metadata };
 }
 
 function output(data: unknown, isError = false) {
@@ -22,8 +24,12 @@ function output(data: unknown, isError = false) {
   };
 }
 
-async function invoke<T>(extra: unknown, work: (caller: VerifiedCaller) => Promise<T>) {
-  const caller = callerFromExtra(extra);
+async function invoke<T>(
+  extra: unknown,
+  verifiedTenantId: string,
+  work: (caller: VerifiedCaller) => Promise<T>,
+) {
+  const caller = callerFromExtra(extra, verifiedTenantId);
   if (!caller) return output({ ok: false, error: "NOT_AUTHENTICATED" }, true);
   try {
     return output({ ok: true, result: await work(caller) });
@@ -33,28 +39,26 @@ async function invoke<T>(extra: unknown, work: (caller: VerifiedCaller) => Promi
   }
 }
 
-export function registerGitHubTools(server: McpServer, operations: GitHubOperations) {
+/**
+ * Read tools only. GitHub writes are intentionally NOT registered in #17.
+ * #5 will add an explicit independently reviewed approval/write gate.
+ */
+export function registerGitHubReadTools(
+  server: McpServer,
+  operations: GitHubOperations,
+  verifiedTenantId: string,
+): void {
+  if (!verifiedTenantId) throw new Error("Verified tenant required for GitHub tools");
   server.registerTool(
     "github_get_pull_request",
     {
-      title: "Get a pull request",
-      description: "Read a pull request through the App bound to this authenticated conversation.",
+      title: "Get a pull request as the bound GitHub App",
+      description: "Read a PR through the App bound to this authenticated conversation.",
       inputSchema: z.object({ repository: z.string(), number: z.number().int().positive() }),
       annotations: { readOnlyHint: true },
     },
     async ({ repository, number }, extra) =>
-      invoke(extra, caller => operations.getPullRequest(caller, repository, number)),
-  );
-
-  server.registerTool(
-    "github_comment_on_pr",
-    {
-      title: "Comment on a pull request as the bound GitHub App",
-      description: "Post a visible PR comment using the current chat's bound GitHub App. Requires approval before sending.",
-      inputSchema: z.object({ repository: z.string(), number: z.number().int().positive(), comment: z.string().min(1).max(60000) }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-    },
-    async ({ repository, number, comment }, extra) =>
-      invoke(extra, caller => operations.commentOnPullRequest(caller, repository, number, comment)),
+      invoke(extra, verifiedTenantId, caller =>
+        operations.getPullRequest(caller, repository, number)),
   );
 }
