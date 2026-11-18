@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { registerGitHubTools } from "./github-mcp.ts";
+import { verifiedTenantFromContext } from "./verified-tenant.ts";
 import type { GitHubOperations } from "./github-operations.ts";
 import * as z from "zod/v4";
 import {
@@ -30,12 +31,6 @@ function metadata(extra: unknown): ClientMetadata {
   return undefined;
 }
 
-function verifiedTenant(extra: unknown): string | undefined {
-  if (!extra || typeof extra !== "object" || !("http" in extra)) return undefined;
-  const http = extra.http as { authInfo?: { clientId?: string } } | undefined;
-  return http?.authInfo?.clientId;
-}
-
 export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubOperations): McpServer {
   const server = new McpServer({
     name: "github-agent-identities",
@@ -52,7 +47,7 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     },
     async (_args, extra) => {
       try {
-        return result({ ok: true, ...(await router.identify(metadata(extra), verifiedTenant(extra))) });
+        return result({ ok: true, ...(await router.identify(metadata(extra), verifiedTenantFromContext(extra))) });
       } catch (error) {
         return errorResult(error);
       }
@@ -80,7 +75,7 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     },
     async ({ identityId }, extra) => {
       try {
-        return result({ ok: true, ...(await router.bind(metadata(extra), identityId, verifiedTenant(extra))) });
+        return result({ ok: true, ...(await router.bind(metadata(extra), identityId, verifiedTenantFromContext(extra))) });
       } catch (error) {
         return errorResult(error);
       }
@@ -97,7 +92,7 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     },
     async (_args, extra) => {
       try {
-        return result({ ok: true, ...(await router.identify(metadata(extra), verifiedTenant(extra))) });
+        return result({ ok: true, ...(await router.identify(metadata(extra), verifiedTenantFromContext(extra))) });
       } catch (error) {
         return errorResult(error);
       }
