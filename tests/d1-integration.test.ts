@@ -18,7 +18,9 @@ function runtime(persistPath: string) {
   return new Miniflare({
     modules: true,
     script: "export default { fetch: () => new Response('test-worker') }",
-    compatibilityDate: "2026-11-18",
+    // Stable Miniflare v4 binary currently supports dates through 2026-08-06.
+    // These tests cover the D1 adapter, not production runtime compatibility.
+    compatibilityDate: "2026-08-06",
     d1Databases: { DB: databaseId },
     resourcePersistencePath: persistPath,
   });
