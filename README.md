@@ -57,7 +57,7 @@ References: [OpenAI plugin submission](https://developers.openai.com/plugins/dep
 - [ ] [#7](https://github.com/keego/github-agent-identities/issues/7) — Validate a graphical identity picker and recovery UX.
 - [ ] [#1](https://github.com/keego/github-agent-identities/issues/1) — Public Plugin Directory strategy and optional dedicated domain.
 
-See [the implementation plan](docs/roadmap.md) for dependencies, release gates, and the operator setup boundary.
+See [the implementation plan](docs/roadmap.md), [private Access authentication](docs/cloudflare-access.md), and the [read-only GitHub App pilot](docs/github-pilot-readonly.md) for dependencies, release gates, and operator setup.
 
 ## Security principles
 
