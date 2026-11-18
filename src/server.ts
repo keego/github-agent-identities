@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { conversationMetadata } from "./request-context.ts";
-import { registerGitHubTools } from "./github-mcp.ts";
+import { registerGitHubReadTools } from "./github-mcp.ts";
 import { verifiedTenantFromContext } from "./verified-tenant.ts";
 import type { GitHubOperations } from "./github-operations.ts";
 import * as z from "zod/v4";
@@ -94,6 +94,6 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     },
   );
 
-  if (github) registerGitHubTools(server, github);
+  if (github && trustedTenantId) registerGitHubReadTools(server, github, trustedTenantId);
   return server;
 }
