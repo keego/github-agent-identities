@@ -6,7 +6,7 @@
 
 Give separate ChatGPT or Codex conversations recognizable GitHub App identities when they collaborate on issues and pull requests—without standing up a separate plugin or MCP server for each agent.
 
-> **Project status: tested foundation, not yet deployed.** The TypeScript MCP server, chat identity binding, D1 persistence adapter, GitHub App authentication client, PR read/comment operations, and disabled-by-default Cloudflare Worker scaffold are merged. GitHub Actions passed **35/35 unit and integration tests** on the merged foundation (November 18, 2026). The hosted OAuth boundary, real D1 deployment, GitHub App credential provisioning, and live bot-attributed comment are **not yet implemented or verified end-to-end**.
+> **Project status: tested foundation and private authentication code; live deployment pending.** The MCP server, D1 integration adapter/tests, GitHub App client, and Cloudflare Worker are implemented. The Worker now requires a verified Cloudflare Access Managed OAuth user and an operator allowlist before exposing identity tools. **Real Access/ChatGPT login, production deployment, GitHub App credential provisioning, and bot-attributed writes have not yet been verified.**
 
 ## How it will work
 
@@ -26,7 +26,7 @@ A missing or unrecognized conversation binding will prompt you to choose an iden
 | **Private hosted instance** | Maintainer and invited friends/family | Same open-source server, but authenticated and access-restricted. **Not** a public free service. |
 | **Public ChatGPT plugin** | Potential future release | A discoverable directory listing, subject to OpenAI's endpoint rules and publication review. |
 
-**Self-hosting is a first-class goal**, not an afterthought. The core server and adapters exist, but the deployment walkthrough is **not yet runnable end-to-end**. See [Self-hosting and deployment architecture](docs/self-hosting.md), [private Cloudflare pilot](docs/cloudflare-pilot.md), and the [development roadmap](docs/roadmap.md).
+**Self-hosting is a first-class goal**, not an afterthought. The core server and adapters exist, but the deployment walkthrough is **not yet runnable end-to-end**. See [Self-hosting and deployment architecture](docs/self-hosting.md), [private Cloudflare pilot](docs/cloudflare-pilot.md), [Access authentication setup](docs/cloudflare-access.md), and the [development roadmap](docs/roadmap.md).
 
 ### Public plugin publication: still on the roadmap
 
