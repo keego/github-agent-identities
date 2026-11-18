@@ -151,6 +151,15 @@ test("two invited humans get tenant-specific identity lists and independent chat
     assert.deepEqual(aList.identities?.map(item => item.id), ["design"]);
     assert.deepEqual(bList.identities?.map(item => item.id), ["qa"]);
 
+    // Tenant IDs are only available *after* authentication, and cannot be
+    // supplied by clients. They allow secure private App registry onboarding.
+    const aAccount = await alice.client.callTool({ name: "get_my_tenant_id", arguments: {} });
+    const bAccount = await bob.client.callTool({ name: "get_my_tenant_id", arguments: {} });
+    const aTenant = JSON.parse(aAccount.content?.[0]?.type === "text" ? aAccount.content[0].text : "{}");
+    const bTenant = JSON.parse(bAccount.content?.[0]?.type === "text" ? bAccount.content[0].text : "{}");
+    assert.equal(aTenant.tenantId, "cloudflare-access:alice-id");
+    assert.equal(bTenant.tenantId, "cloudflare-access:bob-id");
+
     const aBind = parse(await alice.client.callTool({
       name: "bind_identity", arguments: { identityId: "design" }, _meta: meta,
     }));
