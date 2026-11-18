@@ -22,7 +22,9 @@ function runtime(persistPath: string) {
     // These tests cover the D1 adapter, not production runtime compatibility.
     compatibilityDate: "2026-08-06",
     d1Databases: { DB: databaseId },
-    resourcePersistencePath: persistPath,
+    // Miniflare v4 uses a per-resource persistence option; v5 uses
+    // resourcePersistencePath instead.
+    d1Persist: persistPath,
   });
 }
 
