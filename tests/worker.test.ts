@@ -11,7 +11,7 @@ test("Worker responds to health without exposing MCP capability", async () => {
 
 test("Worker disables MCP by default even if DB is configured", async () => {
   const env = { DB: {} as WorkerEnv["DB"], MCP_PUBLIC_HOSTNAME: "mcp.example.org" };
-  const response = await worker.fetch(new Request("https://mcp.example.org/mcp", { method: "POST" }), env);
+  const response = await worker.fetch(new Request("https://mcp.example.org/mcp", { method: "POST", headers: { Host: "mcp.example.org" } }), env);
   assert.equal(response.status, 503);
 });
 
@@ -27,6 +27,6 @@ test("Worker rejects requests on unexpected Host before touching D1", async () =
     MCP_PUBLIC_HOSTNAME: "mcp.example.org",
     DB: { prepare: () => { throw new Error("DB access should not happen"); } },
   } as WorkerEnv;
-  const response = await worker.fetch(new Request("https://evil.example.org/mcp", { method: "POST" }), env);
+  const response = await worker.fetch(new Request("https://evil.example.org/mcp", { method: "POST", headers: { Host: "evil.example.org" } }), env);
   assert.equal(response.status, 403);
 });
