@@ -14,7 +14,8 @@
     "check": "npm run typecheck && npm test",
     "test:d1": "tsx --test tests/d1-integration.test.ts",
     "cf:build": "cf build --mode staging",
-    "cf:build:dry-run": "cf deploy --mode staging --dry-run"
+    "cf:build:dry-run": "cf deploy --mode staging --dry-run",
+    "qa:local": "npm run check && npm run cf:build"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",
