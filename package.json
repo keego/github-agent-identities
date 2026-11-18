@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "description": "Conversation-bound GitHub App identities for MCP clients",
-  "engines": { "node": ">=22.16.0" },
+  "engines": {
+    "node": ">=22.16.0"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "dev:local": "tsx src/local.ts",
-    "check": "npm run typecheck && npm test"
+    "check": "npm run typecheck && npm test",
+    "test:d1": "tsx --test tests/d1-integration.test.ts",
+    "cf:build": "cf build --mode staging",
+    "cf:build:dry-run": "cf deploy --mode staging --dry-run"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "2.4.0",
@@ -21,6 +26,9 @@
     "@types/node": "^22.15.0",
     "@modelcontextprotocol/client": "2.4.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "cf": "1.0.0-rc.1",
+    "miniflare": "4.20260730.0",
+    "wrangler": "^4.164.0"
   }
 }
