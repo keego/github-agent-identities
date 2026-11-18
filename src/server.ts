@@ -107,4 +107,4 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
 
   if (github) registerGitHubTools(server, github);
   return server;
-
+}
