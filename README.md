@@ -59,6 +59,12 @@ References: [OpenAI plugin submission](https://developers.openai.com/plugins/dep
 
 See [the implementation plan](docs/roadmap.md), [private Access authentication](docs/cloudflare-access.md), and the [read-only GitHub App pilot](docs/github-pilot-readonly.md) for dependencies, release gates, and operator setup.
 
+## Contributing and local QA
+
+Start with `npm install --no-audit --no-fund`, then run `npm run qa:local` before pushing a ready PR. Keep active PRs in **draft** so they don't consume CI runners on every edit. The ready-for-review event runs the full CI suite; merged `main` remains independently tested.
+
+See the [local-first QA playbook](docs/qa-playbook.md) and [PR checklist](.github/pull_request_template.md). [#24](https://github.com/keego/github-agent-identities/issues/24) tracks the future reproducible npm lockfile/cache improvement.
+
 ## Security principles
 
 - GitHub App credentials stay in the operator's protected server-side secret store—never in chats or the open-source repository.

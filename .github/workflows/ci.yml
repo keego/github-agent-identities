@@ -1,21 +1,37 @@
 name: CI
+
 on:
   pull_request:
+    # Draft PRs are for local-first development; run final QA when made ready.
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   push:
     branches: [main]
+  workflow_dispatch:
+
 permissions:
   contents: read
+
+# A new commit to a ready PR cancels its superseded run. Keep post-merge
+# main verification independent (and never cancel it because of PR updates).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   unit:
+    # Draft PRs still receive an inexpensive skipped check, not a runner job.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Install dependencies
+        # Replace with npm ci once #24 commits a real package-lock.json.
         run: npm install --no-audit --no-fund
-      - name: Typecheck and unit tests
-        run: npm run check
-      - name: Build disabled staging Worker (no deployment)
-        run: npm run cf:build
+      - name: Full preflight (types, tests including local D1, Worker bundle)
+        run: npm run qa:local
