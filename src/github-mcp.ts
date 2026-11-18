@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/server";
+import { conversationMetadata } from "./request-context.ts";
 import { verifiedTenantFromContext } from "./verified-tenant.ts";
 import * as z from "zod/v4";
 import {
@@ -9,10 +10,9 @@ import {
 
 function callerFromExtra(extra: unknown): VerifiedCaller | null {
   const tenantId = verifiedTenantFromContext(extra);
-  if (!tenantId || !extra || typeof extra !== "object" || !("_meta" in extra)) return null;
-  const meta = extra._meta;
-  if (!meta || typeof meta !== "object") return null;
-  return { tenantId, metadata: meta as Record<string, unknown> };
+  const metadata = conversationMetadata(extra);
+  if (!tenantId || !metadata) return null;
+  return { tenantId, metadata };
 }
 
 function output(data: unknown, isError = false) {
