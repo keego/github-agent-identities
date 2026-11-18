@@ -6,7 +6,7 @@
 
 Give separate ChatGPT or Codex conversations recognizable GitHub App identities when they collaborate on issues and pull requests—without standing up a separate plugin or MCP server for each agent.
 
-> **Project status: early prototype / design.** A separate proof of concept successfully identified distinct ChatGPT conversations and retained independent role bindings across repeated calls. The production MCP server and GitHub App integrations are **not yet implemented in this repository**.
+> **Project status: tested foundation, not yet deployed.** The TypeScript MCP server, chat identity binding, D1 persistence adapter, GitHub App authentication client, PR read/comment operations, and disabled-by-default Cloudflare Worker scaffold are merged. GitHub Actions passed **35/35 unit and integration tests** on the merged foundation (November 18, 2026). The hosted OAuth boundary, real D1 deployment, GitHub App credential provisioning, and live bot-attributed comment are **not yet implemented or verified end-to-end**.
 
 ## How it will work
 
@@ -26,7 +26,7 @@ A missing or unrecognized conversation binding will prompt you to choose an iden
 | **Private hosted instance** | Maintainer and invited friends/family | Same open-source server, but authenticated and access-restricted. **Not** a public free service. |
 | **Public ChatGPT plugin** | Potential future release | A discoverable directory listing, subject to OpenAI's endpoint rules and publication review. |
 
-**Self-hosting is a first-class goal**, not an afterthought. See [Self-hosting and deployment architecture](docs/self-hosting.md) for the planned components, credentials model, and setup path. The guide is currently architectural; runnable deployment instructions will come with the server implementation.
+**Self-hosting is a first-class goal**, not an afterthought. The core server and adapters exist, but the deployment walkthrough is **not yet runnable end-to-end**. See [Self-hosting and deployment architecture](docs/self-hosting.md), [private Cloudflare pilot](docs/cloudflare-pilot.md), and the [development roadmap](docs/roadmap.md).
 
 ### Public plugin publication: still on the roadmap
 
@@ -38,14 +38,26 @@ References: [OpenAI plugin submission](https://developers.openai.com/plugins/dep
 
 ## Roadmap
 
-- [x] Validate that different ChatGPT conversations can obtain distinct session fingerprints and retain different role bindings in a proof of concept.
-- [ ] Publish a reusable TypeScript MCP server and automated tests.
-- [ ] Persist user-scoped conversation-to-App identity bindings.
-- [ ] Add a supported identity selection experience and recovery for unbound chats.
-- [ ] Connect GitHub Apps using securely stored credentials and short-lived installation tokens.
-- [ ] Read GitHub PRs and issues; write a test PR comment attributed to the selected bot.
-- [ ] Ship tested, documented self-hosting (initially considering Cloudflare Workers + D1).
-- [ ] Decide on a dedicated domain, public plugin eligibility and submission strategy.
+### Implemented and tested
+
+- [x] Demonstrate distinct ChatGPT conversations with independent role bindings.
+- [x] Publish the TypeScript MCP server, real SDK HTTP protocol test, and automated regression suite.
+- [x] Implement D1 binding adapter and SQL migrations (integration with a real D1 instance still pending).
+- [x] Implement friendly identity discovery and binding tool fallback (graphical picker still pending).
+- [x] Implement GitHub App registry, short-lived installation-token client, and PR read/comment modules (mock-tested; live operations still pending).
+- [x] Add a Cloudflare Worker scaffold that **fails closed by default**.
+
+### Next: private pilot
+
+- [ ] [#15](https://github.com/keego/github-agent-identities/issues/15) — Real Worker/D1 integration, migrations and staging smoke tests.
+- [ ] [#16](https://github.com/keego/github-agent-identities/issues/16) — Authenticated ChatGPT MCP access and isolated, verified tenants.
+- [ ] [#17](https://github.com/keego/github-agent-identities/issues/17) — Securely wire GitHub App `5808833` installation `183125278`; prove a read-only App call.
+- [ ] [#5](https://github.com/keego/github-agent-identities/issues/5) — Post a real PR comment as the selected GitHub App bot.
+- [ ] [#18](https://github.com/keego/github-agent-identities/issues/18) — Tested self-hosting and operator runbook.
+- [ ] [#7](https://github.com/keego/github-agent-identities/issues/7) — Validate a graphical identity picker and recovery UX.
+- [ ] [#1](https://github.com/keego/github-agent-identities/issues/1) — Public Plugin Directory strategy and optional dedicated domain.
+
+See [the implementation plan](docs/roadmap.md) for dependencies, release gates, and the operator setup boundary.
 
 ## Security principles
 

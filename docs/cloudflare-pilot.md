@@ -1,6 +1,6 @@
 # Cloudflare pilot — deployment is gated
 
-The repository includes a Cloudflare Workers module in `src/worker.ts`, but **does not deploy anything automatically**. The module is **disabled by default**. It returns HTTP 503 for MCP requests until a separate authenticated access layer is implemented, or an operator explicitly enables a credential-free identity-only test mode.
+The merged repository includes a Cloudflare Workers module in `src/worker.ts`, D1 store adapter and migration files, and mock/unit protocol tests. **No production Worker or D1 instance has been deployed or verified yet.** The module is **disabled by default**: it returns HTTP 503 for MCP requests until an authenticated access layer is implemented or an operator explicitly enables the credential-free, identity-only demo mode.
 
 ## Environment bindings
 
@@ -25,6 +25,6 @@ See [Cloudflare's stateless MCP handler docs](https://developers.cloudflare.com/
 
 ## Next operator configuration
 
-The pilot GitHub App ID is 5808833. The App **installation ID** and **private key** are still required to exercise GitHub API tools. Do not paste the private key into issues or ChatGPT messages; it should be provisioned directly in Cloudflare's secrets interface.
+The pilot uses GitHub **App ID `5808833`** and operator-confirmed **installation ID `183125278`** for **Poster Brain - UI/UX Designer**. Both numeric IDs are public identifiers, **not credentials**. The installation's repository selection and actual token issuance have **not** been verified by a live API call. A GitHub App **private key is still required** to exercise real GitHub API tools; provision it directly in Cloudflare's protected Worker secrets, never in an issue, chat, D1 field or commit. See [GitHub App setup](github-app-setup.md).
 
-The operator will also need to choose the authentication method for an invited-only deployment and verify that ChatGPT can connect before we enable any writes.
+The operator will also need to configure authenticated, invited-only access and verify that ChatGPT can connect before any GitHub write tools are enabled. See the [deployment roadmap](roadmap.md) and issues [#15](https://github.com/keego/github-agent-identities/issues/15), [#16](https://github.com/keego/github-agent-identities/issues/16), and [#17](https://github.com/keego/github-agent-identities/issues/17). No dedicated domain or public free hosting is required for the pilot.
