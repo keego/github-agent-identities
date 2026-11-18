@@ -38,7 +38,8 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     },
     async (_args, extra) => {
       try {
-        return result({ ok: true, ...(await router.identify(conversationMetadata(extra), verifiedTenantFromContext(extra))) });
+        const state = await router.identify(conversationMetadata(extra), verifiedTenantFromContext(extra));
+        return result({ ok: true, ...state, ...(!state.registered ? { availableIdentities: router.list() } : {}) });
       } catch (error) {
         return errorResult(error);
       }
