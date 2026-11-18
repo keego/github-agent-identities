@@ -1,0 +1,25 @@
+{
+  "name": "github-agent-identities",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Conversation-bound GitHub App identities for MCP clients",
+  "engines": { "node": ">=22.16.0" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "dev:local": "tsx src/local.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "@modelcontextprotocol/node": "2.1.2",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@modelcontextprotocol/client": "2.4.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3"
+  }
+}
