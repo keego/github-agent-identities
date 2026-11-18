@@ -1,8 +1,9 @@
 import { bindings, defineConfig } from "cf/config";
 
 /**
- * Public pilot scaffold only. All MCP access stays disabled until #16
- * supplies real, verified user authentication.
+ * Private pilot configuration. All MCP access stays disabled until the
+ * operator explicitly configures Cloudflare Access Managed OAuth and an
+ * allowlist. Even then, GitHub write tools stay unregistered until #17.
  *
  * Production and staging use DIFFERENT Worker and D1 resource names. Set
  * MCP_PUBLIC_HOSTNAME explicitly in each deployment environment.
@@ -21,7 +22,11 @@ export default defineConfig(({ mode }) => {
           name: staging ? "github-agent-identities-staging" : "github-agent-identities",
         }),
         MCP_PUBLIC_HOSTNAME: bindings.text(process.env.MCP_PUBLIC_HOSTNAME || "unconfigured.invalid"),
-        ENABLE_UNAUTHENTICATED_DEMO: bindings.text("false"),
+        // Must be set in operator deployment environment after enabling
+        // Cloudflare Access Managed OAuth on this specific Worker.
+        ACCESS_ISSUER: bindings.text(process.env.ACCESS_ISSUER || ""),
+        ACCESS_AUDIENCE: bindings.text(process.env.ACCESS_AUDIENCE || ""),
+        ALLOWED_ACCESS_EMAILS: bindings.text(process.env.ALLOWED_ACCESS_EMAILS || ""),
       },
     },
   };
