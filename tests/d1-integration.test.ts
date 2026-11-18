@@ -100,7 +100,7 @@ test("real D1 rejects writes before migration; Worker denies MCP without explici
       },
     );
     assert.equal(response.status, 503);
-    assert.match(await response.text(), /not configured/i);
+    assert.match(await response.text(), /AUTH_NOT_CONFIGURED/);
   } finally {
     await mf.dispose();
     await rm(dir, { recursive: true, force: true });
