@@ -32,7 +32,15 @@ async function applyMigrations(mf: Miniflare) {
     "migrations/0001_conversation_bindings.sql",
     "migrations/0002_github_app_identities.sql",
   ]) {
-    await db.exec(await readFile(path.join(process.cwd(), migration), "utf8"));
+    // Miniflare's D1 exec() treats a comment-only line as an invalid SQL
+    // statement. Prepare each statement from our two simple SQL migrations,
+    // stripping standalone comments before executing it.
+    const source = await readFile(path.join(process.cwd(), migration), "utf8");
+    const sql = source.split("\n")
+      .filter(line => !line.trimStart().startsWith("--")).join("\n");
+    for (const statement of sql.split(";").map(item => item.trim()).filter(Boolean)) {
+      await db.prepare(statement).run();
+    }
   }
   return db;
 }
