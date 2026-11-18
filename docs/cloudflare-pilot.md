@@ -1,30 +1,28 @@
-# Cloudflare pilot — deployment is gated
+# Private Cloudflare MCP pilot
 
-The merged repository includes a Cloudflare Workers module in `src/worker.ts`, D1 store adapter and migration files, and mock/unit protocol tests. **No production Worker or D1 instance has been deployed or verified yet.** The module is **disabled by default**: it returns HTTP 503 for MCP requests until an authenticated access layer is implemented or an operator explicitly enables the credential-free, identity-only demo mode.
+> **Status:** The repository includes local D1 integration tests, Cloudflare Worker bundling, and an **Access-authenticated** MCP identity endpoint. The code is tested with signed synthetic assertions, but **no real Access application or ChatGPT OAuth connection has been verified**. A staging D1 database exists; GitHub App credentials and live bot writes are not deployed.
 
-## Environment bindings
+## Components and configuration
 
-- `DB`: Cloudflare D1 binding with migrations 0001 and 0002.
-- `MCP_PUBLIC_HOSTNAME`: exact HTTPS hostname expected for Host validation, excluding scheme.
-- `ENABLE_UNAUTHENTICATED_DEMO`: optional string `true`; allows only identity POC tools, **not GitHub tools**.
+- `DB`: Cloudflare D1 database with conversation binding and tenant App registry schema.
+- `MCP_PUBLIC_HOSTNAME`: Exact public Worker hostname for Host validation, without scheme.
+- `ACCESS_ISSUER`: Verified Cloudflare Access team issuer, `https://<team>.cloudflareaccess.com`.
+- `ACCESS_AUDIENCE`: Access application's unique audience tag.
+- `ALLOWED_ACCESS_EMAILS`: Explicit invited-user allowlist; empty means the Worker refuses MCP access.
+- `ENABLE_UNAUTHENTICATED_DEMO`: Old proof-of-concept switch. **No longer honored** by the authenticated Worker; it cannot bypass sign-in.
 
-The demo mode is only for a short-lived, controlled integration test and must not store secrets, expose GitHub App write operations, or be offered as a shared public service.
+Cloudflare Access **Managed OAuth** supplies user sign-in, OAuth discovery, consent and token refresh. The Worker independently validates the signed `Cf-Access-Jwt-Assertion` via Cloudflare public keys, checks issuer/audience/time and allowlist, and derives the tenant namespace exclusively from the signed human subject. The Worker constructs an MCP router for that verified tenant **after** authentication. A request's OAuth `clientId` or MCP `openai/subject` metadata never authorizes a person.
 
-## Authentication required before a real deployment
+Until an operator configures Access, issuer, audience and allowlist, the MCP endpoint returns HTTP **503**. A signed assertion from an uninvited user is denied **403**. There is **no anonymous identity-only mode** and no GitHub API tools in the Worker.
 
-1. Implement ChatGPT-compatible OAuth authorization for the MCP endpoint.
-2. Validate token claims at the Worker boundary and derive a verified tenant ID there.
-3. Pass verified authentication to the MCP handler; do not treat `_meta["openai/subject"]` as the login identity.
-4. Construct the authenticated tenant's identity catalog from the D1 App registry.
-5. Register GitHub read/write tools only when authentication, per-tenant App ownership, repository allowlists and secrets are all configured.
-6. Test token expiry, revocation, user isolation, GitHub App attribution and error logging.
+## Next operator steps
 
-No GitHub App private keys, installation tokens, or other credentials are included in this repository. Key provisioning should use Cloudflare Workers secrets and an operator-only setup flow.
+1. Read [Cloudflare Access setup](cloudflare-access.md) for an invited-only staging Access application, Managed OAuth and verification.
+2. Make sure the existing staging D1 database is bound correctly, and deploy the Worker with an exact staging hostname.
+3. Configure the Access team issuer, application AUD and invited-user allowlist through the operator deployment environment; don't commit addresses or credentials.
+4. Test a real ChatGPT custom MCP connection with at least one invited account, including reconnect/refresh and missing/invalid-token denial. Close [#16](https://github.com/keego/github-agent-identities/issues/16) only after that live verification.
+5. Provision GitHub App 5808833 / installation 183125278 **via protected Worker secrets** and verify a read-only API operation under [#17](https://github.com/keego/github-agent-identities/issues/17), then explicitly approve a test bot comment under [#5](https://github.com/keego/github-agent-identities/issues/5).
 
-See [Cloudflare's stateless MCP handler docs](https://developers.cloudflare.com/agents/model-context-protocol/apis/handler-api/) and [OpenAI MCP plugin auth](https://developers.openai.com/plugins/build/auth).
+No custom domain purchase or public free-service hosting is required.
 
-## Next operator configuration
-
-The pilot uses GitHub **App ID `5808833`** and operator-confirmed **installation ID `183125278`** for **Poster Brain - UI/UX Designer**. Both numeric IDs are public identifiers, **not credentials**. The installation's repository selection and actual token issuance have **not** been verified by a live API call. A GitHub App **private key is still required** to exercise real GitHub API tools; provision it directly in Cloudflare's protected Worker secrets, never in an issue, chat, D1 field or commit. See [GitHub App setup](github-app-setup.md).
-
-The operator will also need to configure authenticated, invited-only access and verify that ChatGPT can connect before any GitHub write tools are enabled. See the [deployment roadmap](roadmap.md) and issues [#15](https://github.com/keego/github-agent-identities/issues/15), [#16](https://github.com/keego/github-agent-identities/issues/16), and [#17](https://github.com/keego/github-agent-identities/issues/17). No dedicated domain or public free hosting is required for the pilot.
+See [local D1/staging development](cloudflare-staging.md), [private authentication](cloudflare-access.md), and the [implementation roadmap](roadmap.md).

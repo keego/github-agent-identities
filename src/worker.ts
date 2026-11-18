@@ -1,53 +1,91 @@
 /**
- * Cloudflare Workers MCP skeleton.
+ * Private, Cloudflare Access-protected MCP endpoint.
  *
- * SAFE DEFAULT: returns 503 until the operator deliberately enables a
- * credential-free, identity-only demo. GitHub App tools are NOT registered.
- * This is not a production authenticated deployment.
+ * Cloudflare Access Managed OAuth supplies sign-in/consent/refresh at the
+ * edge. This Worker independently verifies every signed identity assertion
+ * and an explicit operator allowlist before even constructing MCP tools.
+ *
+ * GitHub App tools are deliberately NOT registered until issue #17.
  */
 import {
   createMcpHandler,
   hostHeaderValidationResponse,
   originValidationResponse,
 } from "@modelcontextprotocol/server";
+import { type JWTVerifyGetKey } from "jose";
 import { D1BindingStore, type SqlDatabase } from "./d1-store.ts";
-import { IdentityRouter, exampleIdentities } from "./core.ts";
+import { D1AppRegistry } from "./github-apps.ts";
+import { createTenantRouter } from "./tenant-router.ts";
 import { createIdentityMcpServer } from "./server.ts";
+import { accessSettings, authenticateAccess } from "./access-auth.ts";
 
+type RegistryDatabase = ConstructorParameters<typeof D1AppRegistry>[0];
 export type WorkerEnv = {
-  DB: SqlDatabase;
+  DB: SqlDatabase & RegistryDatabase;
   MCP_PUBLIC_HOSTNAME: string;
+  ACCESS_ISSUER?: string;
+  ACCESS_AUDIENCE?: string;
+  ALLOWED_ACCESS_EMAILS?: string;
+  /** Deprecated POC switch: intentionally ignored in the private Worker. */
   ENABLE_UNAUTHENTICATED_DEMO?: string;
 };
 
-async function handle(request: Request, env: WorkerEnv): Promise<Response> {
-  if (request.method === "GET" && new URL(request.url).pathname === "/health") {
-    return new Response("healthy", { status: 200, headers: { "Cache-Control": "no-store" } });
-  }
+const denied = (status: number, error: string): Response =>
+  Response.json({ ok: false, error }, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
 
-  // Deploying the Worker is not equivalent to granting access.
-  // Unauthenticated demo mode is strictly an opt-in, GitHub-free pilot.
-  if (env.ENABLE_UNAUTHENTICATED_DEMO !== "true") {
-    return new Response("MCP service not configured for authenticated access", {
-      status: 503,
-      headers: { "Cache-Control": "no-store" },
+/** keyResolver is test-only; production always uses Cloudflare's JWKS. */
+export async function handlePrivateWorker(
+  request: Request,
+  env: WorkerEnv,
+  keyResolver?: JWTVerifyGetKey,
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/health") {
+    return new Response("healthy", {
+      status: 200, headers: { "Cache-Control": "no-store" },
     });
   }
-  if (!env.DB || !env.MCP_PUBLIC_HOSTNAME) {
-    return new Response("MCP demo configuration missing", { status: 503 });
-  }
+
+  if (!env.DB || !env.MCP_PUBLIC_HOSTNAME) return denied(503, "NOT_CONFIGURED");
   const hostRejected = hostHeaderValidationResponse(request, [env.MCP_PUBLIC_HOSTNAME]);
   if (hostRejected) return hostRejected;
   const originRejected = originValidationResponse(request, ["chatgpt.com", env.MCP_PUBLIC_HOSTNAME]);
   if (originRejected) return originRejected;
 
-  if (new URL(request.url).pathname !== "/mcp") return new Response("Not found", { status: 404 });
+  if (url.pathname !== "/mcp") return denied(404, "NOT_FOUND");
 
-  const router = new IdentityRouter(new D1BindingStore(env.DB), exampleIdentities);
-  const handler = createMcpHandler(() => createIdentityMcpServer(router), {
-    responseMode: "json",
-  });
+  const settings = accessSettings(env);
+  if (!settings) return denied(503, "AUTH_NOT_CONFIGURED");
+
+  const auth = await authenticateAccess(request, settings, keyResolver);
+  if (!auth.ok) return denied(auth.status, auth.code);
+
+  // This is the ONLY source of the production tenant. Request metadata,
+  // tool arguments, OAuth clientId and untrusted headers have no authority.
+  const tenantId = auth.principal.tenantId;
+  let router;
+  try {
+    router = await createTenantRouter(
+      new D1BindingStore(env.DB),
+      new D1AppRegistry(env.DB),
+      tenantId,
+    );
+  } catch {
+    // Schema errors and DB availability problems must not leak internals.
+    return denied(503, "STORAGE_UNAVAILABLE");
+  }
+  const handler = createMcpHandler(
+    () => createIdentityMcpServer(router, undefined, tenantId),
+    { responseMode: "json" },
+  );
   return handler.fetch(request);
 }
 
-export default { fetch: handle };
+export default {
+  fetch(request: Request, env: WorkerEnv) {
+    return handlePrivateWorker(request, env);
+  },
+};

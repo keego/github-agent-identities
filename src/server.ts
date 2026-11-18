@@ -22,7 +22,10 @@ function errorResult(error: unknown) {
   return { ...result({ ok: false, error: "INTERNAL_ERROR" }), isError: true };
 }
 
-export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubOperations): McpServer {
+export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubOperations, trustedTenantId?: string): McpServer {
+  // Production uses a verified tenant captured by the authenticated HTTP boundary.
+  // Local development can still use the earlier metadata-only POC contract.
+  const tenantFor = (extra: unknown) => trustedTenantId ?? verifiedTenantFromContext(extra);
   const server = new McpServer({
     name: "github-agent-identities",
     version: "0.1.0",
@@ -38,7 +41,7 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     },
     async (_args, extra) => {
       try {
-        const state = await router.identify(conversationMetadata(extra), verifiedTenantFromContext(extra));
+        const state = await router.identify(conversationMetadata(extra), tenantFor(extra));
         return result({ ok: true, ...state, ...(!state.registered ? { availableIdentities: router.list() } : {}) });
       } catch (error) {
         return errorResult(error);
@@ -67,7 +70,7 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     },
     async ({ identityId }, extra) => {
       try {
-        return result({ ok: true, ...(await router.bind(conversationMetadata(extra), identityId, verifiedTenantFromContext(extra))) });
+        return result({ ok: true, ...(await router.bind(conversationMetadata(extra), identityId, tenantFor(extra))) });
       } catch (error) {
         return errorResult(error);
       }
@@ -84,7 +87,7 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     },
     async (_args, extra) => {
       try {
-        return result({ ok: true, ...(await router.identify(conversationMetadata(extra), verifiedTenantFromContext(extra))) });
+        return result({ ok: true, ...(await router.identify(conversationMetadata(extra), tenantFor(extra))) });
       } catch (error) {
         return errorResult(error);
       }

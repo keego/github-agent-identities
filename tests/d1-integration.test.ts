@@ -91,14 +91,16 @@ test("real D1 rejects writes before migration; Worker denies MCP without explici
 
     // No real GitHub credentials or public MCP tools should be reachable by default.
     const response = await worker.fetch(
-      new Request("https://mcp.invalid.example/mcp", { method: "POST" }),
+      new Request("https://mcp.invalid.example/mcp", {
+        method: "POST", headers: { Host: "mcp.invalid.example" },
+      }),
       {
         DB: db,
         MCP_PUBLIC_HOSTNAME: "mcp.invalid.example",
       },
     );
     assert.equal(response.status, 503);
-    assert.match(await response.text(), /not configured/i);
+    assert.match(await response.text(), /AUTH_NOT_CONFIGURED/);
   } finally {
     await mf.dispose();
     await rm(dir, { recursive: true, force: true });
