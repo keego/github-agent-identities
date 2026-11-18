@@ -41,7 +41,7 @@ function isNonemptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-export async function getChatIdentity(meta: ClientMetadata): Promise<ChatIdentity> {
+export async function getChatIdentity(meta: ClientMetadata, tenantId = "unverified"): Promise<ChatIdentity> {
   const session = meta?.["openai/session"];
   const subject = meta?.["openai/subject"];
 
@@ -51,7 +51,7 @@ export async function getChatIdentity(meta: ClientMetadata): Promise<ChatIdentit
   }
 
   // Domain-separate the two fields. Only a pseudonymous digest is persisted.
-  const material = JSON.stringify(["github-agent-identities/v1", subject, session]);
+  const material = JSON.stringify(["github-agent-identities/v2", tenantId, subject, session]);
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(material),
@@ -79,8 +79,8 @@ export class IdentityRouter {
     return [...this.identities.values()];
   }
 
-  async identify(meta: ClientMetadata) {
-    const { key, fingerprint } = await getChatIdentity(meta);
+  async identify(meta: ClientMetadata, tenantId?: string) {
+    const { key, fingerprint } = await getChatIdentity(meta, tenantId);
     const identityId = await this.store.read(key);
     const identity = identityId ? this.identities.get(identityId) ?? null : null;
     return {
@@ -90,10 +90,10 @@ export class IdentityRouter {
     };
   }
 
-  async bind(meta: ClientMetadata, identityId: string) {
+  async bind(meta: ClientMetadata, identityId: string, tenantId?: string) {
     const identity = this.identities.get(identityId);
     if (!identity) throw new IdentityError("IDENTITY_NOT_FOUND");
-    const { key, fingerprint } = await getChatIdentity(meta);
+    const { key, fingerprint } = await getChatIdentity(meta, tenantId);
     await this.store.write(key, identity.id);
     return { registered: true, fingerprint, identity };
   }

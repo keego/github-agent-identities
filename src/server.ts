@@ -1,5 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { conversationMetadata } from "./request-context.ts";
+import { registerGitHubTools } from "./github-mcp.ts";
+import { verifiedTenantFromContext } from "./verified-tenant.ts";
+import type { GitHubOperations } from "./github-operations.ts";
 import * as z from "zod/v4";
 import {
   IdentityRouter,
@@ -19,7 +22,7 @@ function errorResult(error: unknown) {
   return { ...result({ ok: false, error: "INTERNAL_ERROR" }), isError: true };
 }
 
-export function createIdentityMcpServer(router: IdentityRouter): McpServer {
+export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubOperations): McpServer {
   const server = new McpServer({
     name: "github-agent-identities",
     version: "0.1.0",
@@ -35,7 +38,7 @@ export function createIdentityMcpServer(router: IdentityRouter): McpServer {
     },
     async (_args, extra) => {
       try {
-        return result({ ok: true, ...(await router.identify(conversationMetadata(extra))) });
+        return result({ ok: true, ...(await router.identify(conversationMetadata(extra), verifiedTenantFromContext(extra))) });
       } catch (error) {
         return errorResult(error);
       }
@@ -63,7 +66,7 @@ export function createIdentityMcpServer(router: IdentityRouter): McpServer {
     },
     async ({ identityId }, extra) => {
       try {
-        return result({ ok: true, ...(await router.bind(conversationMetadata(extra), identityId)) });
+        return result({ ok: true, ...(await router.bind(conversationMetadata(extra), identityId, verifiedTenantFromContext(extra))) });
       } catch (error) {
         return errorResult(error);
       }
@@ -80,12 +83,13 @@ export function createIdentityMcpServer(router: IdentityRouter): McpServer {
     },
     async (_args, extra) => {
       try {
-        return result({ ok: true, ...(await router.identify(conversationMetadata(extra))) });
+        return result({ ok: true, ...(await router.identify(conversationMetadata(extra), verifiedTenantFromContext(extra))) });
       } catch (error) {
         return errorResult(error);
       }
     },
   );
 
+  if (github) registerGitHubTools(server, github);
   return server;
 }
