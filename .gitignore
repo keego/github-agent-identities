@@ -5,3 +5,6 @@ dist/
 .env.*
 !.env.example
 .wrangler/
+
+# cf CLI builds and local D1 resources
+.cloudflare/
