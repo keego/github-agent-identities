@@ -10,7 +10,7 @@ The Access application is restricted by an email policy and Google sign-in; its 
 
 ### Manual GitHub Actions workflow
 
-This project has a **manual-only** workflow, [`.github/workflows/deploy-staging.yml`](../.github/workflows/deploy-staging.yml). It **never triggers on a push or PR**. It runs `npm run qa:local` and then `npx cf deploy --mode staging --no-provision` once when the operator requests it. This preserves the local-first QA / reduced Actions burn-rate strategy.
+This project has a **manual-only** workflow, [`.github/workflows/deploy-staging.yml`](../.github/workflows/deploy-staging.yml). It **never triggers on a push or PR**. It runs `npm run qa:local` and then `npx cf deploy --mode staging --no-provision` when the operator requests it. For the **first** deployment only, it offers an explicitly confirmed `takeover_api_bootstrap` option that adds `--force` to replace the 503-only Worker originally created through the Cloudflare Script API. Normal deployments do **not** use `--force`. This preserves the local-first QA / reduced Actions burn-rate strategy.
 
 1. In the GitHub repository, open **Settings → Environments**, and create an environment called `staging`. Optionally enable required reviewer approval.
 2. Under **staging → Environment variables**, configure:
@@ -32,7 +32,7 @@ This project has a **manual-only** workflow, [`.github/workflows/deploy-staging.
 
    Make sure the Cloudflare API token can **edit Workers scripts and read the already-created D1 binding** in the specified account. Use Cloudflare's API-token permissions guidance; the CLI may report extra required scopes for your setup. Do not put your private GitHub App key in GitHub Actions.
 
-4. From **Actions → Deploy private MCP staging (manual) → Run workflow**, choose `main` and run. The job rejects missing variables, runs all tests and a Worker build, and deploys with `--no-provision` so it cannot silently create a second database. It explicitly forces `GH_APP_READONLY_ENABLED=false`, leaving GitHub read and write tools absent.
+4. From **Actions → Deploy private MCP staging (manual) → Run workflow**, choose **`main`**. **On the first run replacing the known 503-only bootstrap**, select **`takeover_api_bootstrap` = true** (check the box). This adds `--force` only for that explicitly approved first takeover. Leave the box **unchecked on all future deployments**, which use the normal, conflict-protected deployment path. The job rejects missing variables, runs all tests and a Worker build, and always retains `--no-provision` so it cannot silently create a second database. It explicitly forces `GH_APP_READONLY_ENABLED=false`, leaving GitHub read and write tools absent.
 5. Once the workflow succeeds, open the staging `https://<worker-host>/health` behind Access. Complete the invited-user sign-in. An authenticated health check should return `healthy`; unauthenticated requests should encounter an Access authentication challenge.
 6. Connect a **custom MCP server** in ChatGPT using `https://<worker-host>/mcp` and authenticate via Cloudflare Access Managed OAuth. Inspect `list_identities`, `identify_chat` and `get_my_tenant_id`. The identity list is expected to be **empty** until an operator registers App identities in D1.
 7. Check an uninvited account, missing/expired token, and cross-session isolation. Do **not** mark [Issue #16](https://github.com/keego/github-agent-identities/issues/16) complete until a real ChatGPT connection works.
@@ -44,6 +44,7 @@ Only the Cloudflare *deployment* API token is needed for this workflow. The GitH
 ### Rollback / safety
 
 - `cf deploy --no-provision` refuses to create missing resources rather than silently provisioning replacements.
+- **One-time takeover risk:** `--force` deliberately overrides the old API-managed bootstrap Worker code/config with the reviewed Git-backed staging build. Before selecting the takeover checkbox, confirm the remote Worker is `github-agent-identities-staging`, it still has only the expected staging D1 binding, and the Cloudflare Access owner-only application remains active. Do not select takeover mode for normal deployments or other Workers. The first takeover does not bypass Cloudflare Access, tests or `--no-provision`.
 - This workflow uses the existing `github-agent-identities-staging` Worker name; it does **not** deploy to production, alter the existing Roommate Ledger/Homelab Access apps, or make the endpoint publicly usable.
 - The Cloudflare Access policy is configured independently from the Worker bundle. On a bad build, use Cloudflare Worker version rollback in the dashboard. **Do not remove Access protection** to troubleshoot.
 - If GitHub Actions preflight fails, fix the workflow or API-token permissions rather than turning off the tests. Confirm the actual deploy job outcome before claiming the service is live.
