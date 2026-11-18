@@ -81,12 +81,9 @@ jobs:
           set -euo pipefail
           url="https://${MCP_PUBLIC_HOSTNAME}/health"
           code="$(curl --silent --show-error --max-time 25 --connect-timeout 10 --output /dev/null --write-out '%{http_code}' "$url")"
-          if [[ "$code" =~ ^2[0-9][0-9]$ ]]; then
-            echo '::error::Anonymous /health is accessible; Access policy must protect the entire Worker'
-            exit 1
-          fi
-          if [[ "$code" == '000' ]]; then
-            echo '::error::Staging /health could not be reached; cannot verify Access boundary'
-            exit 1
-          fi
+          case "$code" in
+            302|303|307|308|401|403) ;; # Access denied or redirected to sign-in
+            2??) echo '::error::Anonymous /health is accessible; Access must protect the entire Worker'; exit 1 ;;
+            *) echo "::error::Unexpected anonymous /health response (HTTP $code); Access denial not established"; exit 1 ;;
+          esac
           echo "Anonymous staging health request denied by Access (HTTP $code)"
