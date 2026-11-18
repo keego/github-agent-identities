@@ -1,12 +1,12 @@
 # Cloudflare staging integration (Issue #15)
 
-> **Status: local D1 integration and staging build harness; not a hosted service.** This document intentionally does not describe an authenticated production deployment. The current `src/worker.ts` returns HTTP **503** for MCP requests by default and exposes **no GitHub write tools**.
+> **Status: local D1 tests and private-authenticated Worker code; no live ChatGPT login or deployed MCP service verified.** Without Cloudflare Access issuer, application audience, and an invited-user allowlist, `src/worker.ts` returns HTTP **503** for MCP requests. It exposes **no GitHub write tools**.
 
 ## Layout and safety
 
 - `cloudflare.config.ts` uses Cloudflare's `cf` CLI configuration, with separate **`github-agent-identities-staging`** and **`github-agent-identities`** Worker and D1 names.
 - `DB` is the D1 binding; the existing `migrations/0001_...` and `0002_...` create conversation bindings and tenant App metadata tables.
-- `ENABLE_UNAUTHENTICATED_DEMO` is permanently `false` in deployment configuration. Do not override this in a publicly reachable Worker. Real OAuth and authorized MCP access are [#16](https://github.com/keego/github-agent-identities/issues/16).
+- The old `ENABLE_UNAUTHENTICATED_DEMO` option is **ignored** by the Worker; no unauthenticated mode remains. Private MCP requires Cloudflare Access Managed OAuth, a valid signed Access assertion, exact Access audience, and an explicit invited-user allowlist. See [Access setup](cloudflare-access.md) and [#16](https://github.com/keego/github-agent-identities/issues/16).
 - `MCP_PUBLIC_HOSTNAME` defaults to `unconfigured.invalid`; set the correct staging/production hostname through your deployment environment when later enabling authenticated MCP requests. Do not reuse the maintainer's personal domain by default.
 - **No GitHub App PEM, JWT, installation token, or public endpoint is required for local tests.**
 
@@ -41,7 +41,7 @@ npm install
 npx cf dev --mode staging
 ```
 
-For a local Worker: `GET /health` returns HTTP 200 while `POST /mcp` returns 503 with `ENABLE_UNAUTHENTICATED_DEMO=false`. This deliberate behavior prevents using an unauthenticated identity-only proof of concept as a permanent public endpoint.
+For a local Worker: `GET /health` returns HTTP 200 while `POST /mcp` returns 503 until issuer, audience, and user allowlist are provided. Without a valid signed Access assertion, `/mcp` returns HTTP 401 even with configuration present. This deliberate behavior prevents exposing an anonymous MCP service.
 
 If you need a local D1 resource through `cf`, the CLI supports:
 
@@ -61,7 +61,7 @@ Use the actual local database ID reported by your setup; no ID is hardcoded in t
 3. Apply the versioned SQL migrations to that **staging ID only**: `npx cf d1 migrations apply <STAGING_DATABASE_ID> --dir migrations`. Verify which account and database the command targets. Do not run it against a production database by accident.
 4. Set the correct `MCP_PUBLIC_HOSTNAME` for the Worker hostname in your **operator environment**; run `npx cf build --mode staging` and `npx cf deploy --mode staging --dry-run` first.
 5. Deploy the locked Worker using `npx cf deploy --mode staging --no-provision` **only after confirming the staging resources and intended bound database**. Verify that `/health` responds, `/mcp` remains denied, and no GitHub tools are exposed.
-6. Next, implement verified OAuth/user auth in #16 before allowing selected trusted ChatGPT users to connect; register GitHub App credentials only after that (#17).
+6. Configure [Cloudflare Access Managed OAuth](cloudflare-access.md) and verify a real ChatGPT connection under #16 before allowing trusted users to connect. Register GitHub App credentials only after that (#17).
 
 `cf` may evolve while its 1.0 release candidate stabilizes. Check `npx cf --help` and `npx cf d1 migrations apply --help` against your installed version before targeting remote resources. The automated PR tests do **not** create a remote database, account or Worker.
 
