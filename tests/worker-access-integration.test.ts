@@ -45,6 +45,11 @@ function fakeDatabase(): WorkerEnv["DB"] {
             const id = bindings.get(String(values[0]));
             return (id ? { identity_id: id } : null) as T | null;
           }
+          if (sql.includes("github_app_identities")) {
+            const row = (apps[String(values[0])] ?? [])
+              .find(identity => identity.identity_id === String(values[1]));
+            return (row ?? null) as T | null;
+          }
           throw new Error("Unexpected first query");
         },
         async all<T>(): Promise<{ results: T[] }> {
