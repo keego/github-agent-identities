@@ -43,7 +43,7 @@ test("real local D1 executes both SQL migrations, persists bindings, isolates ch
     const tables = await db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('conversation_bindings', 'github_app_identities') ORDER BY name"
     ).all<{ name: string }>();
-    assert.deepEqual(tables.results.map(row => row.name), [
+    assert.deepEqual(tables.results.map((row: { name: string }) => row.name), [
       "conversation_bindings", "github_app_identities",
     ]);
 
