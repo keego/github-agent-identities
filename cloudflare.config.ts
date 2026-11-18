@@ -20,6 +20,9 @@ export default defineConfig(({ mode }) => {
       env: {
         DB: bindings.d1({
           name: staging ? "github-agent-identities-staging" : "github-agent-identities",
+          // Explicit ID is required for --no-provision remote deployment.
+          // Build-only CI intentionally leaves it unset.
+          id: staging ? process.env.STAGING_D1_DATABASE_ID : process.env.PRODUCTION_D1_DATABASE_ID,
         }),
         MCP_PUBLIC_HOSTNAME: bindings.text(process.env.MCP_PUBLIC_HOSTNAME || "unconfigured.invalid"),
         // Must be set in operator deployment environment after enabling
