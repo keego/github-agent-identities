@@ -93,6 +93,8 @@ async function setup() {
       {
         fetch(url, init) {
           const headers = new Headers(init?.headers);
+          // Native Cloudflare HTTP requests include Host; Node Request() does not.
+          headers.set("Host", "private.example.workers.dev");
           if (assertion) headers.set("Cf-Access-Jwt-Assertion", assertion);
           return handlePrivateWorker(
             new Request(url, { ...init, headers }),
@@ -121,7 +123,9 @@ function parse(result: { content?: Array<{ type: string; text?: string }> }) {
 test("unauthenticated requests fail before any MCP tool is reachable", async () => {
   const { env, resolver, clientFor } = await setup();
   const res = await handlePrivateWorker(
-    new Request("https://private.example.workers.dev/mcp", { method: "POST" }),
+    new Request("https://private.example.workers.dev/mcp", {
+      method: "POST", headers: { Host: "private.example.workers.dev" },
+    }),
     env, resolver,
   );
   assert.equal(res.status, 401);
