@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/server";
+import { verifiedTenantFromContext } from "./verified-tenant.ts";
 import * as z from "zod/v4";
 import {
   GitHubOperations,
@@ -7,16 +8,11 @@ import {
 } from "./github-operations.ts";
 
 function callerFromExtra(extra: unknown): VerifiedCaller | null {
-  if (!extra || typeof extra !== "object") return null;
-  const ctx = extra as {
-    _meta?: Record<string, unknown>;
-    http?: { authInfo?: { clientId?: string } };
-  };
-  // Only verified authInfo injected by HTTP authentication middleware
-  // may define the tenant. Never accept tenant as a model tool argument.
-  const tenantId = ctx.http?.authInfo?.clientId;
-  if (!tenantId || !ctx._meta) return null;
-  return { tenantId, metadata: ctx._meta };
+  const tenantId = verifiedTenantFromContext(extra);
+  if (!tenantId || !extra || typeof extra !== "object" || !("_meta" in extra)) return null;
+  const meta = extra._meta;
+  if (!meta || typeof meta !== "object") return null;
+  return { tenantId, metadata: meta as Record<string, unknown> };
 }
 
 function output(data: unknown, isError = false) {
