@@ -6,7 +6,7 @@
 
 Give separate ChatGPT or Codex conversations recognizable GitHub App identities when they collaborate on issues and pull requests—without standing up a separate plugin or MCP server for each agent.
 
-> **Project status: private staging Worker deployed; end-to-end authentication pending.** The MCP server, local D1 integration suite, GitHub App client and authenticated Cloudflare Worker have been implemented. [Manual staging deployment](https://github.com/keego/github-agent-identities/actions/runs/44378420871) passed **46 tests** and deployed the real Worker with an existing D1 binding. Cloudflare Access Managed OAuth and an owner-only policy are configured. **Real ChatGPT sign-in, GitHub App credential provisioning, live PR reads and bot-attributed writes have not yet been verified.**
+> **Project status: private staging Worker deployed; first authenticated ChatGPT smoke test observed; full security acceptance pending.** The MCP server, local D1 integration suite, GitHub App client and authenticated Cloudflare Worker are implemented. [Manual staging deployment](https://github.com/keego/github-agent-identities/actions/runs/44378420871) passed **46 tests** with the existing D1 binding. On November 19, an authenticated ChatGPT client invoked `identify_chat`, `list_identities` and `get_my_tenant_id`; the App registry was empty as expected. **#16 cross-user isolation, reconnect/refresh and revocation, plus real GitHub App PR reads and bot writes, remain unverified.** See the [dated handoff](docs/AGENT_HANDOFF.md).
 
 ## How it will work
 
@@ -49,7 +49,7 @@ References: [OpenAI plugin submission](https://developers.openai.com/plugins/dep
 
 ### Next: private pilot
 
-- [x] [#15](https://github.com/keego/github-agent-identities/issues/15) — Real local D1 tests, migrated staging database and deployed Worker; full OAuth smoke test still pending #16.
+- [x] [#15](https://github.com/keego/github-agent-identities/issues/15) — Real local D1 tests, migrated staging D1 and deployed Worker; the first authenticated ChatGPT identity-tool smoke test was observed, but #16's full acceptance is open.
 - [ ] [#16](https://github.com/keego/github-agent-identities/issues/16) — Authenticated ChatGPT MCP access and isolated, verified tenants.
 - [ ] [#17](https://github.com/keego/github-agent-identities/issues/17) — Securely wire GitHub App `5808833` installation `183125278`; prove a read-only App call.
 - [ ] [#5](https://github.com/keego/github-agent-identities/issues/5) — Post a real PR comment as the selected GitHub App bot.

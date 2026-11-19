@@ -1,13 +1,13 @@
 # Roadmap: from merged foundation to private pilot
 
-**As of November 18, 2026.** Foundation and private-pilot implementation PRs through [#27](https://github.com/keego/github-agent-identities/pull/27) are merged. Manual [deployment run 44378420871](https://github.com/keego/github-agent-identities/actions/runs/44378420871) passed **46 automated tests**, built and deployed the actual staging Worker with an existing D1 binding. Cloudflare Access Managed OAuth is configured with an owner-only policy. **No real ChatGPT OAuth user login, signed user request, GitHub App token exchange or bot-authored comment has been verified.**
+**As of November 19, 2026.** Foundation and private-pilot PRs through [#29](https://github.com/keego/github-agent-identities/pull/29) are merged. [Staging deployment 44378420871](https://github.com/keego/github-agent-identities/actions/runs/44378420871) passed **46 tests** and deployed the Worker and D1 binding; a later [deploy run](https://github.com/keego/github-agent-identities/actions/runs/44454364758) observed HTTP 401 for anonymous `/health`. On November 19 a real authenticated ChatGPT client invoked `identify_chat`, `list_identities` and `get_my_tenant_id`. **This single-user smoke test does not close #16.** No live GitHub App PR read or bot write is verified.
 
 ## Live staging checkpoint
 
 - **Provisioned and verified:** isolated Cloudflare D1 schema, owner-only Access application with Managed OAuth, TypeScript MCP Worker deployed on the staging `workers.dev` hostname, and 46 passing CI tests.
-- **D1 onboarding state:** zero registered App identities and zero conversation bindings (intentionally empty before first OAuth login).
-- **Security hardening:** deployment configuration explicitly disables version/preview URLs and the manual deploy workflow is gaining an anonymous Access-denial smoke check. These changes are pending the current PR's merge/deploy.
-- **Blocked on user action:** first ChatGPT custom MCP OAuth sign-in/consent, which establishes an actual JWT `sub` and lets us verify tool discovery.
+- **D1 onboarding state:** At the November 18 D1 inspection there were zero App rows and chat bindings; November 19's authenticated `list_identities` still showed no Apps. The binding-row count was not subsequently rechecked.
+- **Security hardening:** Preview URLs are disabled in source. The manual deploy's anonymous `/health` probe observed HTTP 401 in [run 44454364758](https://github.com/keego/github-agent-identities/actions/runs/44454364758); this proves denial for that probe, not complete OAuth acceptance.
+- **Remaining #16 gate:** After the first signed-user tool smoke test, verify two authorized users' isolation, invitation denial, reconnect/refresh, revocation and authenticated chat binding persistence.
 - **Blocked on operator secret:** GitHub App PEM must be installed directly as a Cloudflare Worker secret before read-only #17 verification; no PEM or installation token has been placed in GitHub or chat.
 - **Do not close #16/#17:** the source code and infrastructure exist, but their live acceptance gates remain open.
 
@@ -31,12 +31,12 @@ Parent deployment epic: [#6 — Private Cloudflare service](https://github.com/k
 | --- | --- | --- |
 | MCP chat identification and identity binding | `src/core.ts`, `src/server.ts`, `src/request-context.ts` | Implemented; real MCP client/server test |
 | In-memory adapter | `src/core.ts`, `src/local.ts` | Local-only demo; not durable |
-| D1 binding adapter and SQL migrations | `src/d1-store.ts`, `migrations/` | Implemented; real D1 deployment/integration pending |
-| Tenant-scoped App registry | `src/github-apps.ts`, `src/tenant-router.ts` | Implemented; Worker/runtime wiring pending |
+| D1 binding adapter and SQL migrations | `src/d1-store.ts`, `migrations/` | Local D1 tests pass; staging D1 migrated/bound; authenticated chat persistence not yet proven |
+| Tenant-scoped App registry | `src/github-apps.ts`, `src/tenant-router.ts` | Implemented and wired into authenticated Worker; no Apps yet configured for staging tenant |
 | GitHub App token issuer | `src/github-auth.ts` | Mock-tested; real PEM/token exchange pending |
 | GitHub PR API tools | `src/github-operations.ts`, `src/github-mcp.ts` | Mock-tested; real bot operation pending |
-| Verified tenant context helper | `src/verified-tenant.ts` | Unit-tested; **trusted auth middleware that populates it does not exist yet** |
-| Worker endpoint scaffold | `src/worker.ts` | **Staging deployed** with Access-authenticated code, but no live OAuth handshake verified; GitHub reads explicitly disabled |
+| Verified tenant context helper | `src/verified-tenant.ts`, `src/access-auth.ts`, `src/worker.ts` | JWT-verifying Worker auth boundary implemented; initial live client calls observed; #16 negative paths still pending |
+| Worker endpoint scaffold | `src/worker.ts` | Staging deployed and Access protected; single-user ChatGPT tools observed; GitHub reads forced off in manual deploy |
 
 ## Credentials and configuration boundary
 

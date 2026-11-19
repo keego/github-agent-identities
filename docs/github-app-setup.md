@@ -1,6 +1,6 @@
 # GitHub App configuration
 
-> **Status: pilot identifiers confirmed; live credentials not yet provisioned.** The repository contains a GitHub App installation-token client and tenant-scoped identity registry, but the private Worker is not deployed and bot-attributed writes have not been verified. Do not mistake this document for an executable deployment guide.
+> **Status (November 19, 2026): pilot identifiers confirmed; live GitHub App credentials not yet provisioned.** The private staging Worker is deployed and one authenticated ChatGPT client has invoked identity tools. The App token client and tenant-scoped registry are implemented, but a real installation-token PR read and bot-attributed writes remain unverified. This is not yet an end-to-end self-hosting guide.
 
 ## What the IDs mean
 
@@ -44,7 +44,7 @@ The server's `InstallationTokenProvider` uses Octokit App authentication, caches
 ## Operator steps (not yet executable end-to-end)
 
 1. Deploy the private Worker and test D1 migrations in staging ([#15](https://github.com/keego/github-agent-identities/issues/15)).
-2. Implement ChatGPT-compatible OAuth and verified per-user tenant isolation; protect all MCP tools ([#16](https://github.com/keego/github-agent-identities/issues/16)).
+2. For the maintainer's staging instance, the initial authenticated ChatGPT tool smoke test passed; finish #16's cross-user, reconnect/revocation and failure-path checks. New operators must verify their own secure authentication ([#16](https://github.com/keego/github-agent-identities/issues/16)).
 3. Verify App `5808833` / installation `183125278` relationship and that the installation can access the intended repository. Check installation permissions and selected repository access.
 4. Create a GitHub App private key in GitHub's App settings and **provision it directly into Cloudflare Workers secrets**, without pasting it into ChatGPT or committing it.
 5. Register the App/installation and its permitted repositories for the verified tenant, then perform a read-only request with a short-lived installation token ([#17](https://github.com/keego/github-agent-identities/issues/17)).
