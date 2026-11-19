@@ -13,6 +13,11 @@ on:
         required: true
         type: boolean
         default: false
+      approve_verified_config_override:
+        description: 'Approve a narrowly checked staging configuration override if cf detects expected dashboard drift'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -39,6 +44,7 @@ jobs:
       MCP_PUBLIC_HOSTNAME: ${{ vars.MCP_PUBLIC_HOSTNAME }}
       # Default stays disabled. A manually requested pilot can expose ONLY read-only PR tools.
       GH_APP_READONLY_ENABLED: ${{ inputs.enable_github_app_reads && 'true' || 'false' }}
+      APPROVE_VERIFIED_CONFIG_OVERRIDE: ${{ inputs.approve_verified_config_override && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -73,13 +79,60 @@ jobs:
               exit 1
             fi
           fi
+      - name: Verify exact staging bindings before any configuration override
+        if: ${{ inputs.approve_verified_config_override && !inputs.takeover_api_bootstrap }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The override is scoped to this Worker only and must never accept
+          # unexpected remote resources, a changed D1 ID, or missing secrets.
+          remote="$(curl --fail --silent --show-error --max-time 25 \\
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \\
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/github-agent-identities-staging/settings")"
+          if ! jq -e \\
+            --arg issuer "$ACCESS_ISSUER" \\
+            --arg audience "$ACCESS_AUDIENCE" \\
+            --arg allowlist "$ALLOWED_ACCESS_EMAILS" \\
+            --arg hostname "$MCP_PUBLIC_HOSTNAME" \\
+            --arg db "$STAGING_D1_DATABASE_ID" '
+            .success == true and
+            ((.result.bindings // []) | length == 7) and
+            ((.result.bindings | map(.name) | sort) ==
+              (["ACCESS_ISSUER", "ACCESS_AUDIENCE", "ALLOWED_ACCESS_EMAILS", "DB",
+                "GH_APP_DESIGN_PRIVATE_KEY", "GH_APP_READONLY_ENABLED", "MCP_PUBLIC_HOSTNAME"] | sort)) and
+            (all(.result.bindings[];
+              if .name == "ACCESS_ISSUER" then .type == "plain_text" and .text == $issuer
+              elif .name == "ACCESS_AUDIENCE" then .type == "plain_text" and .text == $audience
+              elif .name == "ALLOWED_ACCESS_EMAILS" then .type == "plain_text" and .text == $allowlist
+              elif .name == "MCP_PUBLIC_HOSTNAME" then .type == "plain_text" and .text == $hostname
+              elif .name == "GH_APP_READONLY_ENABLED" then .type == "plain_text" and (.text == "true" or .text == "false")
+              elif .name == "DB" then .type == "d1" and .id == $db
+              elif .name == "GH_APP_DESIGN_PRIVATE_KEY" then .type == "secret_text"
+              else false end)) and
+            (.result.compatibility_date == "2026-11-18") and
+            (.result.compatibility_flags == ["nodejs_compat"])
+          ' <<<"$remote" >/dev/null; then
+            echo '::error::Unexpected remote Worker settings; refusing configuration override'
+            exit 1
+          fi
+          echo 'Exact staging binding and runtime checks passed; override approved for this run only'
+      - name: Refuse conflicting override modes
+        if: ${{ inputs.approve_verified_config_override && inputs.takeover_api_bootstrap }}
+        run: |
+          echo '::error::Choose only one override mode, never both'
+          exit 1
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Run complete QA before deploying
         run: npm run qa:local
       - name: Deploy staging Worker (normal, no provision)
-        if: ${{ !inputs.takeover_api_bootstrap }}
+        if: ${{ !inputs.takeover_api_bootstrap && !inputs.approve_verified_config_override }}
         run: npx cf deploy --mode staging --no-provision --message 'Private staging OAuth verification'
+      - name: Deploy staging Worker (verified config override only)
+        if: ${{ !inputs.takeover_api_bootstrap && inputs.approve_verified_config_override }}
+        # --force is permitted only after the exact, remote-settings preflight above.
+        # It must never provision another D1 database or bypass Access protection.
+        run: npx cf deploy --mode staging --no-provision --force --message 'Approved verified staging read-only configuration change'
       - name: One-time takeover of API-created staging bootstrap
         if: ${{ inputs.takeover_api_bootstrap }}
         # --force ONLY bypasses API-created Worker conflict after explicit approval.
