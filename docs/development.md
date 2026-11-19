@@ -1,46 +1,45 @@
-# Local development and test boundaries
+# Development and verified staging status
 
-The merged repository contains a **TypeScript MCP server** with chat identity operations, a storage abstraction, D1 and GitHub App adapters, and mock-tested GitHub PR tools. The local server in `src/local.ts` remains an **in-memory identity-only demo**: it does not register GitHub write tools or authenticate arbitrary external users.
+**As of November 18, 2026:** the real TypeScript MCP Worker is deployed to a **private, Access-protected staging hostname** using [manual GitHub Actions run 44378420871](https://github.com/keego/github-agent-identities/actions/runs/44378420871). The run passed **46/46 tests** and the Cloudflare staging build, then deployed Worker version `28957b9e-c62a-4c1c-a625-9f8a5d61b9dd`. The D1 binding and signed Access application configuration were independently verified with Cloudflare's API.
 
-**This is not a production-ready public MCP endpoint.** See [roadmap](roadmap.md).
+**Still unverified:** a real ChatGPT Managed OAuth callback/login, signed assertion from that flow, tool discovery and per-conversation binding, user invitation denial and token revocation, live GitHub App installation-token exchange, and bot-attributed GitHub writes. A successful deployment and synthetic tests are not proof of those user-facing behaviors.
 
-## Requirements
+## Local-first QA
 
-- Node.js 22.16 or later
-- npm
+Use Node.js 22.16+ and npm:
 
 ```sh
-npm install
-npm run check
+npm install --no-audit --no-fund
+npm run qa:local
 npm run dev:local
 ```
 
-The local server listens on `127.0.0.1:8787/mcp`. No GitHub credentials or Cloudflare resources are required to run the local identity-only demo.
+`qa:local` runs TypeScript checking, the full `tsx` test suite (including Miniflare's actual local D1), and the staging Worker build. The local `src/local.ts` server at `127.0.0.1:8787/mcp` is an **identity-only in-memory demo**, not the Cloudflare OAuth service.
 
-## Module overview
+For inexpensive iterative checks use `npm run typecheck`, `npm test` and `npm run test:d1`. Keep PRs in draft until local QA is complete, batch source changes, and run final CI once when ready. See [QA playbook](qa-playbook.md). A committed npm lockfile and `npm ci` are still tracked under [#24](https://github.com/keego/github-agent-identities/issues/24).
 
-| Concern | Files | State |
+## Verified components and boundaries
+
+| Concern | Implementation | Verification |
 | --- | --- | --- |
-| Chat identity and bindings | `src/core.ts`, `src/server.ts`, `src/request-context.ts` | Implemented, protocol-tested |
-| In-memory local persistence | `src/core.ts`, `src/local.ts` | Local-only; restarts lose bindings |
-| Durable database interface | `src/d1-store.ts`, `migrations/` | Implemented; actual D1 integration pending [#15](https://github.com/keego/github-agent-identities/issues/15) |
-| Tenant App registry | `src/github-apps.ts`, `src/tenant-router.ts` | Implemented; authenticated runtime wiring pending |
-| Installation-token issuance | `src/github-auth.ts` | Mock-tested; pilot App provisioning pending [#17](https://github.com/keego/github-agent-identities/issues/17) |
-| GitHub read/comment tools | `src/github-operations.ts`, `src/github-mcp.ts` | Mock-tested; bot comment acceptance pending [#5](https://github.com/keego/github-agent-identities/issues/5) |
-| Cloudflare Worker | `src/worker.ts` | **503-disabled by default**, not a live hosted service |
+| Conversation identity / binding | `src/core.ts`, `src/server.ts`, `src/request-context.ts` | SDK HTTP and negative-path tests; real ChatGPT metadata pending |
+| Local persistent D1 adapter | `src/d1-store.ts`, `migrations/` | Actual local Miniflare D1 schema, isolation and restart tests; staging Cloudflare D1 created and bound |
+| Private signed user authentication | `src/access-auth.ts`, `src/worker.ts` | Synthetic signed-JWT tests and two-user isolation; *real* Managed OAuth still pending |
+| GitHub App registry and token provider | `src/github-apps.ts`, `src/github-auth.ts`, `src/tenant-router.ts` | Mocked token issuance and allowlisting; App PEM and live read pending |
+| GitHub MCP PR read | `src/github-mcp.ts`, `src/github-operations.ts` | Read-only tool integration tests; disabled in deployed staging until operator opt-in |
+| Cloudflare Worker / Access | `src/worker.ts`, `cloudflare.config.ts` | Actual Worker deployed and Access app configured; live browser/client auth pending |
+| App-authored comments | Future #5 | Deliberately absent from staging's registered MCP tools |
 
-## Conversation identity metadata
+MCP client `_meta` fields correlate a conversation, **not** an authenticated person. Production tenant identity is derived from a cryptographically verified Access JWT's `sub`; neither OAuth `clientId`, MCP `openai/session` nor an arbitrary request header can establish tenancy.
 
-The MCP SDK v2 handler reads incoming conversation correlation metadata from `ctx.mcpReq._meta`, including `openai/session` and `openai/subject` where supplied. Missing or invalid metadata fails closed rather than using one shared "unknown" identity. This information is **not proof of login**.
+## Private pilot handoff
 
-The verified tenant must be established by trusted OAuth/user-auth middleware. The `verifiedTenantFromContext` helper exists, but no production middleware currently populates its verified principal; implementing that boundary is [#16](https://github.com/keego/github-agent-identities/issues/16). Do **not** treat an OAuth `clientId` as the user ID.
+1. Verify a real OAuth sign-in from ChatGPT to `https://github-agent-identities-staging.keegansfarley.workers.dev/mcp` (owner must consent/sign in). See [staging runbook](live-staging-deployment.md) and [Access setup](cloudflare-access.md).
+2. Call `get_my_tenant_id` after sign-in and compare the verified tenant with the expected owner in a private operator channel. Do not guess the JWT `sub` or put raw tokens in issues.
+3. Add one operator-approved App identity to D1 with **public App and installation IDs only**, and put its PEM in a **Cloudflare Worker secret**, not D1/GitHub/ChatGPT. See [read-only App pilot](github-pilot-readonly.md).
+4. Enable the read-only GitHub tool only after auth is validated. Verify a PR read, then separately review the write gate under [#5](https://github.com/keego/github-agent-identities/issues/5).
+5. Keep the full unauthorized-access, invitation-revocation and recovery tests as open acceptance gates under [#16](https://github.com/keego/github-agent-identities/issues/16).
 
-## What CI actually verifies
+## Security cautions
 
-`npm run check` runs TypeScript checks and Node tests via `tsx`. CI tests include an in-process **real MCP SDK HTTP client/server** request test with synthetic conversation metadata. D1 operations and GitHub App authentication are mocked. All **35** tests passed on merged `main` on November 18, 2026.
-
-These passing checks do **not** establish deployed D1 durability, real ChatGPT OAuth, the GitHub installation-token exchange, bot-attributed comments or Cloudflare production safety. Those have separate issues and acceptance criteria in the [roadmap](roadmap.md).
-
-## Security in development
-
-Keep GitHub App PEM files, JWTs, installation tokens and Cloudflare Worker secret values outside source control, chat messages and logs. Do not enable anonymous GitHub writers. Restrict real App installations to selected repositories and require a validated caller identity for all MCP tools. The public pilot configuration values (App ID `5808833`, installation ID `183125278`) are **identifiers, not secrets**.
+The staging Worker is *not* a publicly usable MCP. Its real endpoint exists but is intended only for Access-authorized users. Keep `GH_APP_READONLY_ENABLED=false` until the live sign-in and the installation setup pass. Explicitly disable preview/version URLs (`previewUrls: false`), verify anonymous requests are denied, and never print PEM, JWT, installation tokens, Cloudflare API tokens, or invitee lists in logs or public artifacts.

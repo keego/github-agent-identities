@@ -1,6 +1,15 @@
 # Roadmap: from merged foundation to private pilot
 
-**As of November 18, 2026.** All foundation PRs [#8–#13](https://github.com/keego/github-agent-identities/pulls?q=is%3Apr+is%3Aclosed) have been merged. The final integrated `main` workflow passed **35 automated tests**. These tests cover core logic, mocked GitHub and D1 calls, and SDK HTTP protocol behavior; they **do not** demonstrate a real authenticated Cloudflare deployment, a real D1 database, or an App-attributed GitHub comment.
+**As of November 18, 2026.** Foundation and private-pilot implementation PRs through [#27](https://github.com/keego/github-agent-identities/pull/27) are merged. Manual [deployment run 44378420871](https://github.com/keego/github-agent-identities/actions/runs/44378420871) passed **46 automated tests**, built and deployed the actual staging Worker with an existing D1 binding. Cloudflare Access Managed OAuth is configured with an owner-only policy. **No real ChatGPT OAuth user login, signed user request, GitHub App token exchange or bot-authored comment has been verified.**
+
+## Live staging checkpoint
+
+- **Provisioned and verified:** isolated Cloudflare D1 schema, owner-only Access application with Managed OAuth, TypeScript MCP Worker deployed on the staging `workers.dev` hostname, and 46 passing CI tests.
+- **D1 onboarding state:** zero registered App identities and zero conversation bindings (intentionally empty before first OAuth login).
+- **Security hardening:** deployment configuration explicitly disables version/preview URLs and the manual deploy workflow is gaining an anonymous Access-denial smoke check. These changes are pending the current PR's merge/deploy.
+- **Blocked on user action:** first ChatGPT custom MCP OAuth sign-in/consent, which establishes an actual JWT `sub` and lets us verify tool discovery.
+- **Blocked on operator secret:** GitHub App PEM must be installed directly as a Cloudflare Worker secret before read-only #17 verification; no PEM or installation token has been placed in GitHub or chat.
+- **Do not close #16/#17:** the source code and infrastructure exist, but their live acceptance gates remain open.
 
 ## Implementation order
 
@@ -27,7 +36,7 @@ Parent deployment epic: [#6 — Private Cloudflare service](https://github.com/k
 | GitHub App token issuer | `src/github-auth.ts` | Mock-tested; real PEM/token exchange pending |
 | GitHub PR API tools | `src/github-operations.ts`, `src/github-mcp.ts` | Mock-tested; real bot operation pending |
 | Verified tenant context helper | `src/verified-tenant.ts` | Unit-tested; **trusted auth middleware that populates it does not exist yet** |
-| Worker endpoint scaffold | `src/worker.ts` | **Disabled by default**; no production OAuth and no GitHub tools registered |
+| Worker endpoint scaffold | `src/worker.ts` | **Staging deployed** with Access-authenticated code, but no live OAuth handshake verified; GitHub reads explicitly disabled |
 
 ## Credentials and configuration boundary
 

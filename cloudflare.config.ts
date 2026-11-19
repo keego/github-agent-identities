@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => {
       compatibilityDate: "2026-11-18",
       compatibilityFlags: ["nodejs_compat"],
       workersDev: true,
+      // Private hosted instances must never expose version/preview URLs.
+      // Without this explicit setting, workers.dev deployments can turn them on.
+      previewUrls: false,
       env: {
         DB: bindings.d1({
           name: staging ? "github-agent-identities-staging" : "github-agent-identities",

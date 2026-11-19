@@ -6,7 +6,7 @@
 
 Give separate ChatGPT or Codex conversations recognizable GitHub App identities when they collaborate on issues and pull requests—without standing up a separate plugin or MCP server for each agent.
 
-> **Project status: tested foundation and private authentication code; live deployment pending.** The MCP server, D1 integration adapter/tests, GitHub App client, and Cloudflare Worker are implemented. The Worker now requires a verified Cloudflare Access Managed OAuth user and an operator allowlist before exposing identity tools. **Real Access/ChatGPT login, production deployment, GitHub App credential provisioning, and bot-attributed writes have not yet been verified.**
+> **Project status: private staging Worker deployed; end-to-end authentication pending.** The MCP server, local D1 integration suite, GitHub App client and authenticated Cloudflare Worker have been implemented. [Manual staging deployment](https://github.com/keego/github-agent-identities/actions/runs/44378420871) passed **46 tests** and deployed the real Worker with an existing D1 binding. Cloudflare Access Managed OAuth and an owner-only policy are configured. **Real ChatGPT sign-in, GitHub App credential provisioning, live PR reads and bot-attributed writes have not yet been verified.**
 
 ## How it will work
 
@@ -42,14 +42,14 @@ References: [OpenAI plugin submission](https://developers.openai.com/plugins/dep
 
 - [x] Demonstrate distinct ChatGPT conversations with independent role bindings.
 - [x] Publish the TypeScript MCP server, real SDK HTTP protocol test, and automated regression suite.
-- [x] Implement D1 binding adapter and SQL migrations (integration with a real D1 instance still pending).
+- [x] Implement D1 binding adapter and SQL migrations (real local D1 integration verified; live staging binding provisioned).
 - [x] Implement friendly identity discovery and binding tool fallback (graphical picker still pending).
 - [x] Implement GitHub App registry, short-lived installation-token client, and PR read/comment modules (mock-tested; live operations still pending).
 - [x] Add a Cloudflare Worker scaffold that **fails closed by default**.
 
 ### Next: private pilot
 
-- [ ] [#15](https://github.com/keego/github-agent-identities/issues/15) — Real Worker/D1 integration, migrations and staging smoke tests.
+- [x] [#15](https://github.com/keego/github-agent-identities/issues/15) — Real local D1 tests, migrated staging database and deployed Worker; full OAuth smoke test still pending #16.
 - [ ] [#16](https://github.com/keego/github-agent-identities/issues/16) — Authenticated ChatGPT MCP access and isolated, verified tenants.
 - [ ] [#17](https://github.com/keego/github-agent-identities/issues/17) — Securely wire GitHub App `5808833` installation `183125278`; prove a read-only App call.
 - [ ] [#5](https://github.com/keego/github-agent-identities/issues/5) — Post a real PR comment as the selected GitHub App bot.
@@ -57,7 +57,7 @@ References: [OpenAI plugin submission](https://developers.openai.com/plugins/dep
 - [ ] [#7](https://github.com/keego/github-agent-identities/issues/7) — Validate a graphical identity picker and recovery UX.
 - [ ] [#1](https://github.com/keego/github-agent-identities/issues/1) — Public Plugin Directory strategy and optional dedicated domain.
 
-See [the implementation plan](docs/roadmap.md), [private Access authentication](docs/cloudflare-access.md), and the [read-only GitHub App pilot](docs/github-pilot-readonly.md) for dependencies, release gates, and operator setup.
+See [the staging handoff](docs/live-staging-deployment.md), [the implementation plan](docs/roadmap.md), [private Access authentication](docs/cloudflare-access.md), and the [read-only GitHub App pilot](docs/github-pilot-readonly.md) for dependencies, release gates, and operator setup.
 
 ## Contributing and local QA
 
