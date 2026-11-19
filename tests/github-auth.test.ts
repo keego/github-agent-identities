@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { generateKeyPairSync } from "node:crypto";
+import { createAppAuth } from "@octokit/auth-app";
 import { AppTokenError, InstallationTokenProvider, octokitTokenIssuer } from "../src/github-auth.ts";
 import type { AppIdentity } from "../src/github-apps.ts";
 
@@ -28,6 +30,15 @@ test("invalid App private key is classified at local JWT-signing stage, never re
     appId: identity.appId, installationId: identity.installationId,
     privateKey: "not-a-private-key",
   }), "APP_JWT_SIGNING_FAILED");
+});
+
+test("Octokit signs a synthetic PKCS#1 GitHub-style key without contacting GitHub", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const syntheticPem = privateKey.export({ format: "pem", type: "pkcs1" }).toString();
+  const auth = createAppAuth({ appId: identity.appId, privateKey: syntheticPem });
+  const result = await auth({ type: "app" });
+  assert.match(result.token, /^[^.]+\\.[^.]+\\.[^.]+$/);
+  assert.equal(result.appId, identity.appId);
 });
 
 test("installation issuance failure is sanitized, while typed stages are preserved", async () => {
