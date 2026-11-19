@@ -62,8 +62,8 @@ Sources: [OpenAI custom MCP server setup](https://help.openai.com/en/articles/12
 
 - [x] Publish the MCP core, binding store, App-auth/token and GitHub API modules, D1 schema and automated tests.
 - [x] Implement role discovery and identity-binding tools, plus unbound-session fallback.
-- [ ] [#15](https://github.com/keego/github-agent-identities/issues/15): validate real Worker + D1 migrations/persistence and staging deployment.
-- [ ] [#16](https://github.com/keego/github-agent-identities/issues/16): implement authenticated ChatGPT connections and verified per-user tenant isolation.
+- [x] [#15](https://github.com/keego/github-agent-identities/issues/15): local D1 tests and the maintainer's private staging deployment were verified; a new operator still needs their own deployment test.
+- [ ] [#16](https://github.com/keego/github-agent-identities/issues/16): authenticated Worker and first private ChatGPT tool-call smoke exist; cross-user, reconnect/refresh and revocation acceptance remain open.
 - [ ] [#17](https://github.com/keego/github-agent-identities/issues/17): securely provision an operator-owned GitHub App and verify installation token exchange + PR read.
 - [ ] [#5](https://github.com/keego/github-agent-identities/issues/5): verify a real bot-attributed GitHub comment.
 - [ ] [#18](https://github.com/keego/github-agent-identities/issues/18): publish executable self-host install/upgrade, backup and credential-rotation instructions.

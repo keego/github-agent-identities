@@ -1,6 +1,6 @@
 # Private Cloudflare MCP pilot
 
-> **Status:** The **real** MCP Worker was deployed to Cloudflare staging on November 18, 2026 ([successful run](https://github.com/keego/github-agent-identities/actions/runs/44378420871)). Its staging D1 binding and owner-only Cloudflare Access Managed OAuth application are configured. Tests use synthetic signed assertions; **a real ChatGPT OAuth sign-in has not yet been verified**. The D1 App registry remains empty, and there is no GitHub App PEM or live bot write.
+> **Status (November 19, 2026):** The real MCP Worker was deployed to private staging on November 18 ([successful run](https://github.com/keego/github-agent-identities/actions/runs/44378420871)). Its D1 binding and owner-only Cloudflare Access Managed OAuth application are configured. An authenticated ChatGPT client has since invoked `identify_chat`, `list_identities` and `get_my_tenant_id`; the App registry was empty. **This is a single-user smoke test, not #16 security acceptance.** There has been no verified live App PR read or bot write.
 
 ## Components and configuration
 
@@ -18,7 +18,7 @@ Until an operator configures Access, issuer, audience and allowlist, the MCP end
 ## Next operator steps
 
 1. The staging Worker and owner-only Access application are already provisioned. Read the [live staging runbook](live-staging-deployment.md) for the latest evidence and setup details. The one-time API bootstrap takeover is complete; do **not** select takeover mode on future deploys.
-2. Test a real ChatGPT custom MCP connection with the invited account, including consent, reconnect/refresh and missing/invalid-token denial. After sign-in, call `get_my_tenant_id`, `list_identities`, and `identify_chat`.
+2. Extend the successful single-user ChatGPT smoke test to cross-user isolation, invitation denial, reconnect/refresh, revocation and negative-path checks under #16. Do not mistake the empty `list_identities` result for GitHub App onboarding.
 3. Keep `GH_APP_READONLY_ENABLED=false` until this test passes; zero D1 identities is expected at this stage. Close [#16](https://github.com/keego/github-agent-identities/issues/16) only after that live verification.
 5. Provision GitHub App 5808833 / installation 183125278 **via protected Worker secrets** and verify a read-only API operation under [#17](https://github.com/keego/github-agent-identities/issues/17), then explicitly approve a test bot comment under [#5](https://github.com/keego/github-agent-identities/issues/5).
 

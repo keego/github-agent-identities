@@ -1,6 +1,6 @@
 # Private MCP authentication with Cloudflare Access
 
-> **Status: auth implementation in PR #21; real Cloudflare Access / ChatGPT connection still requires operator setup and a live integration test.** The Worker is not a public anonymous MCP service. No GitHub App write tools are exposed by this phase.
+> **Status (November 19, 2026):** The real Worker and Cloudflare Access are deployed to private staging. An authenticated ChatGPT client invoked identity tools; **#16 remains open** for cross-user isolation, reconnect/refresh, revocation and negative-path acceptance. No GitHub write tools are registered.
 
 This project uses **Cloudflare Access Managed OAuth** for the maintainer's private, invite-only hosted instance. Cloudflare handles OAuth sign-in/consent/refresh and restricts access to approved people. The Worker independently validates the signed assertion injected by Cloudflare Access, checks its application audience/issuer, and enforces a second user allowlist.
 
@@ -14,7 +14,7 @@ This avoids hosting a custom OAuth authorization server or buying a new domain. 
 4. `src/access-auth.ts` independently verifies the JWT's **RS256 signature**, issuing team URL, exact application audience, expiration and user claims. It rejects service-token identities with blank subjects.
 5. The Worker checks the subject's verified email against `ALLOWED_ACCESS_EMAILS` (explicit invitation list). All identity tools are registered only **after** this check; absence/misconfiguration returns HTTP 401/403/503 without tools.
 6. A tenant key derived from Cloudflare Access's **verified user subject** scopes conversation hashing and selects that tenant's registered GitHub Apps from D1. The OAuth **client ID**, `openai/session`, `openai/subject`, arbitrary tool parameters and caller-set headers do not define account identity.
-7. **No GitHub tools are registered yet.** Connecting the tenant-owned App and proving bot attribution belong to #17 and #5.
+7. **No GitHub tools are enabled in staging.** A read-only PR tool exists in source behind a disabled operator flag; write tools are unregistered. App reads and bot attribution are still gated separately by #17 and #5.
 
 ## Operator setup checklist (not completed automatically)
 
@@ -49,7 +49,7 @@ npm run cf:build
 
 The tests generate short-lived synthetic RSA signing keys entirely in memory and use local JWK verification to simulate signed Cloudflare Access assertions. They cover wrong issuer/audience, expired/forged tokens, missing signatures, service tokens, uninvited emails, absent settings, and a real SDK HTTP MCP client test with **two separately authorized users sharing identical conversation metadata**. It also verifies the Worker exposes no GitHub write tools.
 
-This is not proof of a real Cloudflare login; Cloudflare Access policy enforcement, token refresh and ChatGPT client compatibility **must** be checked on the actual staging endpoint.
+Synthetic tests alone do not prove a real Cloudflare login. A single-user authenticated ChatGPT tool-call smoke test was observed November 19, but cross-user isolation, reconnect/refresh, token revocation and live negative paths still require verification under #16.
 
 ## Authentication failure handling
 
@@ -73,6 +73,6 @@ Access normally intercepts unauthenticated HTTP requests itself and sends the OA
 
 ## Deferred setup and dependencies
 
-The private deployment epic is [#6](https://github.com/keego/github-agent-identities/issues/6). This work addresses the auth resource boundary in [#16](https://github.com/keego/github-agent-identities/issues/16); a **real Access login and ChatGPT connection** are still required before closing it. Then [#17](https://github.com/keego/github-agent-identities/issues/17) provisions App ID `5808833` and installation `183125278` securely; [#5](https://github.com/keego/github-agent-identities/issues/5) verifies bot-attributed comments.
+The private deployment epic is [#6](https://github.com/keego/github-agent-identities/issues/6). A first authenticated ChatGPT tool-call smoke test was observed November 19; [#16](https://github.com/keego/github-agent-identities/issues/16) remains open until live cross-user, reconnect/refresh, revocation and denial tests pass. [#17](https://github.com/keego/github-agent-identities/issues/17) covers the App read-only pilot; [#5](https://github.com/keego/github-agent-identities/issues/5) separately gates bot-authored comments.
 
 References: [Cloudflare Managed OAuth](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/), [Protect Cloudflare Workers with Access](https://developers.cloudflare.com/workers/configuration/cloudflare-access/), [Cloudflare Access JWT claims](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/application-token/), [OpenAI Plugin authentication](https://developers.openai.com/plugins/build/auth).

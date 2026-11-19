@@ -1,8 +1,8 @@
 # Development and verified staging status
 
-**As of November 18, 2026:** the real TypeScript MCP Worker is deployed to a **private, Access-protected staging hostname** using [manual GitHub Actions run 44378420871](https://github.com/keego/github-agent-identities/actions/runs/44378420871). The run passed **46/46 tests** and the Cloudflare staging build, then deployed Worker version `28957b9e-c62a-4c1c-a625-9f8a5d61b9dd`. The D1 binding and signed Access application configuration were independently verified with Cloudflare's API.
+**Deployment verified November 18, 2026; auth smoke observed November 19.** The real TypeScript MCP Worker was deployed to private Access-protected staging using [manual run 44378420871](https://github.com/keego/github-agent-identities/actions/runs/44378420871), which passed **46/46 tests** and the Worker bundle. Its staging D1 binding and owner-only Access policy are configured.
 
-**Still unverified:** a real ChatGPT Managed OAuth callback/login, signed assertion from that flow, tool discovery and per-conversation binding, user invitation denial and token revocation, live GitHub App installation-token exchange, and bot-attributed GitHub writes. A successful deployment and synthetic tests are not proof of those user-facing behaviors.
+**Observed November 19:** An authenticated ChatGPT client invoked `identify_chat`, `list_identities` and `get_my_tenant_id`; the App registry was empty. **Still unverified in live acceptance:** a second authorized user, invitation denial, reconnect/refresh, revocation, authenticated chat binding persistence, real GitHub App installation-token PR read and bot writes. See [handoff](AGENT_HANDOFF.md) and [#16](https://github.com/keego/github-agent-identities/issues/16).
 
 ## Local-first QA
 
@@ -22,19 +22,19 @@ For inexpensive iterative checks use `npm run typecheck`, `npm test` and `npm ru
 
 | Concern | Implementation | Verification |
 | --- | --- | --- |
-| Conversation identity / binding | `src/core.ts`, `src/server.ts`, `src/request-context.ts` | SDK HTTP and negative-path tests; real ChatGPT metadata pending |
+| Conversation identity / binding | `src/core.ts`, `src/server.ts`, `src/request-context.ts` | SDK HTTP/negative-path tests; authenticated ChatGPT identity-tool calls observed, live binding persistence still pending |
 | Local persistent D1 adapter | `src/d1-store.ts`, `migrations/` | Actual local Miniflare D1 schema, isolation and restart tests; staging Cloudflare D1 created and bound |
-| Private signed user authentication | `src/access-auth.ts`, `src/worker.ts` | Synthetic signed-JWT tests and two-user isolation; *real* Managed OAuth still pending |
+| Private signed user authentication | `src/access-auth.ts`, `src/worker.ts` | Synthetic signed-JWT tests and two-user isolation; single-user live smoke observed, full #16 acceptance pending |
 | GitHub App registry and token provider | `src/github-apps.ts`, `src/github-auth.ts`, `src/tenant-router.ts` | Mocked token issuance and allowlisting; App PEM and live read pending |
 | GitHub MCP PR read | `src/github-mcp.ts`, `src/github-operations.ts` | Read-only tool integration tests; disabled in deployed staging until operator opt-in |
-| Cloudflare Worker / Access | `src/worker.ts`, `cloudflare.config.ts` | Actual Worker deployed and Access app configured; live browser/client auth pending |
+| Cloudflare Worker / Access | `src/worker.ts`, `cloudflare.config.ts` | Staging Worker and Access deployed; anonymous `/health` rejected in subsequent manual deployment; first authenticated client calls observed |
 | App-authored comments | Future #5 | Deliberately absent from staging's registered MCP tools |
 
 MCP client `_meta` fields correlate a conversation, **not** an authenticated person. Production tenant identity is derived from a cryptographically verified Access JWT's `sub`; neither OAuth `clientId`, MCP `openai/session` nor an arbitrary request header can establish tenancy.
 
 ## Private pilot handoff
 
-1. Verify a real OAuth sign-in from ChatGPT to `https://github-agent-identities-staging.keegansfarley.workers.dev/mcp` (owner must consent/sign in). See [staging runbook](live-staging-deployment.md) and [Access setup](cloudflare-access.md).
+1. First authenticated ChatGPT identity-tool smoke observed November 19. Verify two-user isolation, reconnect/refresh, revocation and denial checks before declaring #16 complete. See the [staging runbook](live-staging-deployment.md).
 2. Call `get_my_tenant_id` after sign-in and compare the verified tenant with the expected owner in a private operator channel. Do not guess the JWT `sub` or put raw tokens in issues.
 3. Add one operator-approved App identity to D1 with **public App and installation IDs only**, and put its PEM in a **Cloudflare Worker secret**, not D1/GitHub/ChatGPT. See [read-only App pilot](github-pilot-readonly.md).
 4. Enable the read-only GitHub tool only after auth is validated. Verify a PR read, then separately review the write gate under [#5](https://github.com/keego/github-agent-identities/issues/5).

@@ -44,8 +44,8 @@ Continue [#17 — authenticated read-only GitHub App pilot](https://github.com/k
 
 ## Known documentation drift / pitfalls
 
-- Some README and runbook statements still say **real ChatGPT OAuth has not been verified**. This was accurate before the first successful client tool calls, but is now stale **for the single-user smoke test only**. Do not claim #16's full security acceptance passed.
-- Some historical docs describe the Worker as undeployed or the App read code as unwired. Prefer the merged source and current staging evidence for implementation state, and explicitly flag dated docs.
+- README and operator docs were refreshed after the first single-user authenticated tool-call smoke. This does **not** establish completion of #16's multi-user and revocation acceptance.
+- Earlier dated snapshots and issue comments may still describe an undeployed Worker or unwired App reads. Current staging is deployed, and App read code is wired behind a disabled flag; always distinguish historic text from live evidence.
 - A connected GitHub App **installation** and a router-configured **credential/identity record** are different. Do not equate App existence with a working installation-token exchange.
 - The first pilot's manual credential provisioning is an intentional technical milestone, **not** the eventual zero-friction end-user onboarding UX.
 
