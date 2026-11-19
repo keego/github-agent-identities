@@ -81,41 +81,7 @@ jobs:
           fi
       - name: Verify exact staging bindings before any configuration override
         if: ${{ inputs.approve_verified_config_override && !inputs.takeover_api_bootstrap }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # The override is scoped to this Worker only and must never accept
-          # unexpected remote resources, a changed D1 ID, or missing secrets.
-          remote="$(curl --fail --silent --show-error --max-time 25 \\
-            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \\
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/github-agent-identities-staging/settings")"
-          if ! jq -e \\
-            --arg issuer "$ACCESS_ISSUER" \\
-            --arg audience "$ACCESS_AUDIENCE" \\
-            --arg allowlist "$ALLOWED_ACCESS_EMAILS" \\
-            --arg hostname "$MCP_PUBLIC_HOSTNAME" \\
-            --arg db "$STAGING_D1_DATABASE_ID" '
-            .success == true and
-            ((.result.bindings // []) | length == 7) and
-            ((.result.bindings | map(.name) | sort) ==
-              (["ACCESS_ISSUER", "ACCESS_AUDIENCE", "ALLOWED_ACCESS_EMAILS", "DB",
-                "GH_APP_DESIGN_PRIVATE_KEY", "GH_APP_READONLY_ENABLED", "MCP_PUBLIC_HOSTNAME"] | sort)) and
-            (all(.result.bindings[];
-              if .name == "ACCESS_ISSUER" then .type == "plain_text" and .text == $issuer
-              elif .name == "ACCESS_AUDIENCE" then .type == "plain_text" and .text == $audience
-              elif .name == "ALLOWED_ACCESS_EMAILS" then .type == "plain_text" and .text == $allowlist
-              elif .name == "MCP_PUBLIC_HOSTNAME" then .type == "plain_text" and .text == $hostname
-              elif .name == "GH_APP_READONLY_ENABLED" then .type == "plain_text" and (.text == "true" or .text == "false")
-              elif .name == "DB" then .type == "d1" and .id == $db
-              elif .name == "GH_APP_DESIGN_PRIVATE_KEY" then .type == "secret_text"
-              else false end)) and
-            (.result.compatibility_date == "2026-11-18") and
-            (.result.compatibility_flags == ["nodejs_compat"])
-          ' <<<"$remote" >/dev/null; then
-            echo '::error::Unexpected remote Worker settings; refusing configuration override'
-            exit 1
-          fi
-          echo 'Exact staging binding and runtime checks passed; override approved for this run only'
+        run: node scripts/verify-staging-worker-settings.mjs before
       - name: Refuse conflicting override modes
         if: ${{ inputs.approve_verified_config_override && inputs.takeover_api_bootstrap }}
         run: |
@@ -140,22 +106,7 @@ jobs:
         run: npx cf deploy --mode staging --no-provision --force --message 'Approved one-time API bootstrap takeover'
       - name: Confirm read-only staging bindings after deployment
         if: ${{ inputs.enable_github_app_reads }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          remote="$(curl --fail --silent --show-error --max-time 25 \\
-            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \\
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/github-agent-identities-staging/settings")"
-          if ! jq -e --arg db "$STAGING_D1_DATABASE_ID" '
-            .success == true and
-            any(.result.bindings[]; .name == "GH_APP_READONLY_ENABLED" and .type == "plain_text" and .text == "true") and
-            any(.result.bindings[]; .name == "DB" and .type == "d1" and .id == $db) and
-            any(.result.bindings[]; .name == "GH_APP_DESIGN_PRIVATE_KEY" and .type == "secret_text")
-          ' <<<"$remote" >/dev/null; then
-            echo '::error::Read-only flag, D1, or App secret binding missing after deployment'
-            exit 1
-          fi
-          echo 'Verified post-deploy read-only flag, staging D1 and App secret binding'
+        run: node scripts/verify-staging-worker-settings.mjs after
       - name: Confirm anonymous requests are blocked by Cloudflare Access
         # This is an edge-level check from a fresh CI runner: no cookie/token.
         # Fail if /health returns a public 2xx, and fail on network errors.

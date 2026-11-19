@@ -52,3 +52,9 @@ Continue [#17 — authenticated read-only GitHub App pilot](https://github.com/k
 ## Fresh conversation bootstrap
 
 Read [`AGENTS.md`](../AGENTS.md) first. Then verify the issue/PR/deployment state rather than simply repeating this snapshot. Summarize the verified status and deferred decisions before recommending action. If you can access earlier conversations, recover their rationale; if not, state the limit rather than inventing a history.
+
+## November 19 staging deployment troubleshooting (issue #17)
+
+- The first read-only pilot workflow run [#44611396081](https://github.com/keego/github-agent-identities/actions/runs/44611396081) passed 46 tests but was stopped by `cf` configuration drift (the intentional read-only toggle and D1-name metadata); no upload occurred.
+- A guarded override was added in PR #32, but the second run [#44615950531](https://github.com/keego/github-agent-identities/actions/runs/44615950531) failed **before deployment** because newly authored multi-line `curl` shell had doubled continuation backslashes; `--header` was interpreted as a command. There is no evidence of compromised Access, missing PEM or damaged D1.
+- Replace inline shell pre/post config verification with a Node verifier and regression tests; keep the override checkbox default-off and preserve strict binding/secret/D1 checks. **Do not repeat the live deploy until this fix passes local tests and CI**. The intended next external acceptance remains a read-only authenticated App PR read; never enable comment writes under #17.
