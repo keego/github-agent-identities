@@ -8,6 +8,11 @@ on:
         required: true
         type: boolean
         default: false
+      enable_github_app_reads:
+        description: 'Explicit opt-in to the read-only GitHub App PR pilot; requires a staging Worker App secret'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,8 +37,8 @@ jobs:
       ACCESS_AUDIENCE: ${{ vars.ACCESS_AUDIENCE }}
       ALLOWED_ACCESS_EMAILS: ${{ secrets.ALLOWED_ACCESS_EMAILS }}
       MCP_PUBLIC_HOSTNAME: ${{ vars.MCP_PUBLIC_HOSTNAME }}
-      # This is a sign-in and identity-binding test. No GitHub operations.
-      GH_APP_READONLY_ENABLED: 'false'
+      # Default stays disabled. A manually requested pilot can expose ONLY read-only PR tools.
+      GH_APP_READONLY_ENABLED: ${{ inputs.enable_github_app_reads && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -57,9 +62,16 @@ jobs:
             github-agent-identities-staging.*.workers.dev) ;;
             *) echo "::error::MCP_PUBLIC_HOSTNAME is not the staging workers.dev hostname"; exit 1 ;;
           esac
-          if [ "$GH_APP_READONLY_ENABLED" != 'false' ]; then
-            echo '::error::GitHub reads must remain disabled in the login pilot'
-            exit 1
+          if [ "$GH_APP_READONLY_ENABLED" = 'true' ]; then
+            # Check the pre-existing Worker secret *name*, never read or print its value.
+            # Do not put App PEMs in GitHub Actions secrets or workflow variables.
+            if ! curl --fail --silent --show-error --max-time 25 \\
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \\
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/github-agent-identities-staging/secrets" \\
+              | jq -e '(.success == true) and ((.result // []) | any(.name == "GH_APP_DESIGN_PRIVATE_KEY"))' >/dev/null; then
+              echo '::error::Read-only pilot requires an existing GH_APP_DESIGN_PRIVATE_KEY staging Worker secret binding'
+              exit 1
+            fi
           fi
       - name: Install dependencies
         run: npm install --no-audit --no-fund
