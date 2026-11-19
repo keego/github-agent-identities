@@ -3,6 +3,20 @@ import type { AppIdentity } from "./github-apps.ts";
 
 export type SecretReader = (secretRef: string) => Promise<string | null>;
 
+/** Safe operational stages only; never include private keys, tokens or remote response bodies. */
+export type AppTokenErrorCode =
+  | "APP_SECRET_REF_INVALID"
+  | "APP_SECRET_UNAVAILABLE"
+  | "APP_JWT_SIGNING_FAILED"
+  | "APP_INSTALLATION_TOKEN_FAILED"
+  | "APP_TOKEN_INVALID";
+
+export class AppTokenError extends Error {
+  constructor(public readonly code: AppTokenErrorCode) {
+    super(code);
+  }
+}
+
 export type InstallationToken = {
   token: string;
   expiresAt: string;
@@ -19,9 +33,21 @@ export type TokenIssuer = (params: {
  * and the exchange to a short-lived GitHub installation token.
  */
 export const octokitTokenIssuer: TokenIssuer = async ({ appId, installationId, privateKey }) => {
-  const auth = createAppAuth({ appId, privateKey });
-  const result = await auth({ type: "installation", installationId });
-  return { token: result.token, expiresAt: result.expiresAt };
+  let auth: ReturnType<typeof createAppAuth>;
+  try {
+    auth = createAppAuth({ appId, privateKey });
+    // Sign an App JWT locally first. Never return or log this JWT.
+    // This isolates key/crypto problems from GitHub installation-token exchange failures.
+    await auth({ type: "app" });
+  } catch {
+    throw new AppTokenError("APP_JWT_SIGNING_FAILED");
+  }
+  try {
+    const result = await auth({ type: "installation", installationId });
+    return { token: result.token, expiresAt: result.expiresAt };
+  } catch {
+    throw new AppTokenError("APP_INSTALLATION_TOKEN_FAILED");
+  }
 };
 
 /** Only the trusted backend calls this. Tokens are NEVER put in MCP tool output. */
@@ -42,10 +68,15 @@ export class InstallationTokenProvider {
     }
 
     if (!/^GH_APP_[A-Z0-9_]+_PRIVATE_KEY$/.test(identity.secretRef)) {
-      throw new Error("Invalid secret reference");
+      throw new AppTokenError("APP_SECRET_REF_INVALID");
     }
-    const privateKey = await this.readSecret(identity.secretRef);
-    if (!privateKey) throw new Error("GitHub App private key not configured");
+    let privateKey: string | null;
+    try {
+      privateKey = await this.readSecret(identity.secretRef);
+    } catch {
+      throw new AppTokenError("APP_SECRET_UNAVAILABLE");
+    }
+    if (!privateKey) throw new AppTokenError("APP_SECRET_UNAVAILABLE");
 
     // Never expose the private key or token in thrown errors or logs.
     let issued: InstallationToken;
@@ -55,12 +86,13 @@ export class InstallationTokenProvider {
         installationId: identity.installationId,
         privateKey,
       });
-    } catch {
-      throw new Error("Failed to authenticate GitHub App installation");
+    } catch (error) {
+      if (error instanceof AppTokenError) throw error;
+      throw new AppTokenError("APP_INSTALLATION_TOKEN_FAILED");
     }
     const expiresAt = Date.parse(issued.expiresAt);
     if (!issued.token || !Number.isFinite(expiresAt) || expiresAt <= this.now() + 60_000) {
-      throw new Error("GitHub App token response is invalid or expiring");
+      throw new AppTokenError("APP_TOKEN_INVALID");
     }
     this.cached.set(cacheKey, { token: issued.token, expiresAt });
     return issued.token;

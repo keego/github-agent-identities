@@ -1,4 +1,5 @@
 import { type ClientMetadata, IdentityRouter } from "./core.ts";
+import { AppTokenError, type AppTokenErrorCode } from "./github-auth.ts";
 import { type AppIdentity, type AppRegistry, assertRepositoryAllowed } from "./github-apps.ts";
 
 export interface TokenProvider {
@@ -24,7 +25,8 @@ export type CommentSummary = { id: number; url: string; author: string | null };
 export class GithubOperationError extends Error {
   constructor(public readonly code:
     "NOT_AUTHENTICATED" | "IDENTITY_NOT_BOUND" | "APP_NOT_CONFIGURED" |
-    "REPOSITORY_NOT_ALLOWED" | "INVALID_ARGUMENT" | "GITHUB_REQUEST_FAILED") {
+    "REPOSITORY_NOT_ALLOWED" | "INVALID_ARGUMENT" | "GITHUB_REQUEST_FAILED" |
+    "APP_REGISTRY_FAILED" | AppTokenErrorCode) {
     super(code);
   }
 }
@@ -45,7 +47,12 @@ export class GitHubOperations {
     }
     const current = await this.router.identify(caller.metadata, caller.tenantId);
     if (!current.identity) throw new GithubOperationError("IDENTITY_NOT_BOUND");
-    const identity = await this.registry.getForTenant(caller.tenantId, current.identity.id);
+    let identity: AppIdentity | null;
+    try {
+      identity = await this.registry.getForTenant(caller.tenantId, current.identity.id);
+    } catch {
+      throw new GithubOperationError("APP_REGISTRY_FAILED");
+    }
     if (!identity) throw new GithubOperationError("APP_NOT_CONFIGURED");
     try {
       assertRepositoryAllowed(identity, repository);
@@ -61,7 +68,13 @@ export class GitHubOperations {
     method: "GET" | "POST",
     body?: unknown,
   ): Promise<T> {
-    const token = await this.tokens.forApp(identity);
+    let token: string;
+    try {
+      token = await this.tokens.forApp(identity);
+    } catch (error) {
+      if (error instanceof AppTokenError) throw new GithubOperationError(error.code);
+      throw error;
+    }
     let response: Response;
     try {
       response = await this.httpFetch("https://api.github.com" + path, {
