@@ -138,6 +138,24 @@ jobs:
         # --force ONLY bypasses API-created Worker conflict after explicit approval.
         # --no-provision still prohibits silently creating new D1 resources.
         run: npx cf deploy --mode staging --no-provision --force --message 'Approved one-time API bootstrap takeover'
+      - name: Confirm read-only staging bindings after deployment
+        if: ${{ inputs.enable_github_app_reads }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="$(curl --fail --silent --show-error --max-time 25 \\
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \\
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/github-agent-identities-staging/settings")"
+          if ! jq -e --arg db "$STAGING_D1_DATABASE_ID" '
+            .success == true and
+            any(.result.bindings[]; .name == "GH_APP_READONLY_ENABLED" and .type == "plain_text" and .text == "true") and
+            any(.result.bindings[]; .name == "DB" and .type == "d1" and .id == $db) and
+            any(.result.bindings[]; .name == "GH_APP_DESIGN_PRIVATE_KEY" and .type == "secret_text")
+          ' <<<"$remote" >/dev/null; then
+            echo '::error::Read-only flag, D1, or App secret binding missing after deployment'
+            exit 1
+          fi
+          echo 'Verified post-deploy read-only flag, staging D1 and App secret binding'
       - name: Confirm anonymous requests are blocked by Cloudflare Access
         # This is an edge-level check from a fresh CI runner: no cookie/token.
         # Fail if /health returns a public 2xx, and fail on network errors.
