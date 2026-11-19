@@ -65,9 +65,9 @@ jobs:
           if [ "$GH_APP_READONLY_ENABLED" = 'true' ]; then
             # Check the pre-existing Worker secret *name*, never read or print its value.
             # Do not put App PEMs in GitHub Actions secrets or workflow variables.
-            if ! curl --fail --silent --show-error --max-time 25 \\
-              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \\
-              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/github-agent-identities-staging/secrets" \\
+            if ! curl --fail --silent --show-error --max-time 25 \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/github-agent-identities-staging/secrets" \
               | jq -e '(.success == true) and ((.result // []) | any(.name == "GH_APP_DESIGN_PRIVATE_KEY"))' >/dev/null; then
               echo '::error::Read-only pilot requires an existing GH_APP_DESIGN_PRIVATE_KEY staging Worker secret binding'
               exit 1
