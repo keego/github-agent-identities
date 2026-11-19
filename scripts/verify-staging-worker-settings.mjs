@@ -31,8 +31,10 @@ export function verifyStagingSettings(response, env, phase) {
   requireMatch(bindings.get('GH_APP_DESIGN_PRIVATE_KEY').type === 'secret_text', 'App private-key secret binding missing');
 
   const readFlag = bindings.get('GH_APP_READONLY_ENABLED');
-  const expectedFlag = phase === 'before' ? 'false' : 'true';
-  requireMatch(readFlag.type === 'plain_text' && readFlag.text === expectedFlag, 'Read-only opt-in flag mismatch');
+  // A repeat deployment may already have read-only mode enabled. The explicit
+  // workflow approval still controls whether the new upload enables it.
+  const allowedFlags = phase === 'before' ? ['false', 'true'] : ['true'];
+  requireMatch(readFlag.type === 'plain_text' && allowedFlags.includes(readFlag.text), 'Read-only opt-in flag mismatch');
   requireMatch(settings.compatibility_date === '2026-11-18', 'Worker compatibility date mismatch');
   requireMatch(JSON.stringify(settings.compatibility_flags) === JSON.stringify(['nodejs_compat']), 'Worker compatibility flags mismatch');
 }
