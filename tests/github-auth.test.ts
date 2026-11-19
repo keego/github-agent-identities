@@ -37,7 +37,7 @@ test("Octokit signs a synthetic PKCS#1 GitHub-style key without contacting GitHu
   const syntheticPem = privateKey.export({ format: "pem", type: "pkcs1" }).toString();
   const auth = createAppAuth({ appId: identity.appId, privateKey: syntheticPem });
   const result = await auth({ type: "app" });
-  assert.match(result.token, /^[^.]+\\.[^.]+\\.[^.]+$/);
+  assert.equal(result.token.split(".").length, 3); // Only check shape; never print JWT in failures.
   assert.equal(result.appId, identity.appId);
 });
 
