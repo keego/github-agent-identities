@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { D1AppRegistry, MemoryAppRegistry, assertRepositoryAllowed, type AppIdentity } from "../src/github-apps.ts";
-import { InstallationTokenProvider } from "../src/github-auth.ts";
+import { AppTokenError, InstallationTokenProvider } from "../src/github-auth.ts";
 
 const designer: AppIdentity = {
   identityId: "design",
@@ -49,7 +49,8 @@ test("missing keys fail closed and never call the issuer", async () => {
   const provider = new InstallationTokenProvider(async () => null, async () => {
     called = true; return { token: "x", expiresAt: new Date(Date.now() + 1e6).toISOString() };
   });
-  await assert.rejects(provider.forApp(designer), /not configured/);
+  await assert.rejects(provider.forApp(designer), (error: unknown) =>
+    error instanceof AppTokenError && error.code === "APP_SECRET_UNAVAILABLE");
   assert.equal(called, false);
 });
 
@@ -60,7 +61,7 @@ test("issuer failures do not leak private key or low-level errors", async () => 
   );
   await assert.rejects(provider.forApp(designer), error => {
     assert.ok(error instanceof Error);
-    assert.equal(error.message, "Failed to authenticate GitHub App installation");
+    assert.equal(error.message, "APP_INSTALLATION_TOKEN_FAILED");
     return true;
   });
 });

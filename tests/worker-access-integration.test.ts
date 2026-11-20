@@ -249,6 +249,8 @@ test("GitHub App reads are opt-in and never expose comment writes", async () => 
       arguments: { repository: "keego/poster-brain", number: 1 }, _meta: metadata,
     });
     assert.equal(noSecret.isError, true);
+    assert.match(noSecret.content?.[0]?.type === "text" ? noSecret.content[0].text : "",
+      /APP_SECRET_UNAVAILABLE/);
     assert.equal(available.tools.some(tool => tool.name === "github_comment_on_pr"), false);
   } finally {
     await alice.client.close();

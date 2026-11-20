@@ -24,6 +24,7 @@ function fixture(phase = 'before') {
 }
 test('strict staging pre/post config checks accept expected configuration', () => {
   verifyStagingSettings(fixture('before'), env, 'before');
+  verifyStagingSettings(fixture('after'), env, 'before'); // repeat read-only deployment
   verifyStagingSettings(fixture('after'), env, 'after');
 });
 test('rejects extra bindings, wrong database, wrong user allowlist, missing secret, and unexpected read flag', () => {
@@ -32,14 +33,13 @@ test('rejects extra bindings, wrong database, wrong user allowlist, missing secr
     x => x.result.bindings.find(b => b.name === 'DB').id = 'wrong',
     x => x.result.bindings.find(b => b.name === 'ALLOWED_ACCESS_EMAILS').text = 'wrong',
     x => x.result.bindings.splice(x.result.bindings.findIndex(b => b.name === 'GH_APP_DESIGN_PRIVATE_KEY'), 1),
-    x => x.result.bindings.find(b => b.name === 'GH_APP_READONLY_ENABLED').text = 'true',
+    x => x.result.bindings.find(b => b.name === 'GH_APP_READONLY_ENABLED').text = 'unexpected',
   ];
   for (const mutate of cases) {
     const x = fixture(); mutate(x);
     assert.throws(() => verifyStagingSettings(x, env, 'before'));
   }
   assert.throws(() => verifyStagingSettings(fixture('before'), env, 'after'));
-  assert.throws(() => verifyStagingSettings(fixture('after'), env, 'before'));
 });
 test('live verification uses exact Worker URL and does not expose response values', async () => {
   let visited;

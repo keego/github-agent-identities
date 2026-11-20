@@ -61,6 +61,24 @@ This stores public configuration and a **secret name**, never the PEM value. Onl
 
 To rotate the key, replace the Worker secret through the protected Cloudflare secrets interface and invalidate any cached tokens. Uninstalling/reinstalling the App may change its installation ID; re-verify the selected repositories and update the D1 record.
 
+## Read-only pilot diagnostics (sanitized)
+
+If the authenticated, bound `github_get_pull_request` tool returns an error, record **only** the fixed error code (and PR number), never a PEM, JWT, installation token, Access assertion, or upstream error body.
+
+| Code | Safe interpretation | Operator follow-up |
+| --- | --- | --- |
+| `IDENTITY_NOT_BOUND` | This chat has no selected App | Bind the current conversation first |
+| `REPOSITORY_NOT_ALLOWED` | Repository not on this identity's allowlist | Verify intended authorization in the operator-owned registry |
+| `APP_NOT_CONFIGURED` / `APP_REGISTRY_FAILED` | App entry missing or scoped D1 retrieval failed | Inspect the authenticated tenant's registry row and D1 health |
+| `APP_SECRET_REF_INVALID` / `APP_SECRET_UNAVAILABLE` | Secret reference invalid or Worker key binding unavailable | Verify secret **name/type** in Cloudflare; never read the value into chat |
+| `APP_JWT_SIGNING_FAILED` | Local App JWT signing or PEM parsing failed | Confirm the secret is a valid GitHub-generated App PEM for the selected App and the Worker runtime supports signing |
+| `APP_INSTALLATION_TOKEN_FAILED` | Local signing passed, but GitHub installation-token exchange did not complete | Verify App ID, installation ID, installation status, and GitHub access; do not assume repo permissions without checking |
+| `APP_TOKEN_INVALID` | Token exchange returned an unusable or expiring token | Recheck installation exchange and token lifetime |
+| `GITHUB_REQUEST_FAILED` | Installation token was acquired but subsequent GitHub API PR request failed | Check installation's repository selection and Pull requests permission; GitHub HTTP response bodies stay private |
+| `INTERNAL_ERROR` | Unexpected failure outside classified App-token stages | Investigate the server-side path without dumping sensitive exception contents |
+
+A connector may wrap a tool's `isError` response in a generic runtime error such as `INVALID_ARGUMENT`; inspect the JSON **inside** the MCP tool response for the actual fixed code. Successful tool discovery and binding alone never prove GitHub App authentication.
+
 ## Expected non-ready behavior
 
 - Missing Access issuer/audience/email allowlist → HTTP 503; no MCP tools.

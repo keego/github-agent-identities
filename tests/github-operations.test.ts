@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { IdentityRouter, MemoryBindingStore, exampleIdentities } from "../src/core.ts";
+import { AppTokenError } from "../src/github-auth.ts";
 import { MemoryAppRegistry, type AppIdentity } from "../src/github-apps.ts";
 import { GitHubOperations, GithubOperationError, type VerifiedCaller } from "../src/github-operations.ts";
 
@@ -85,4 +86,32 @@ test("invalid numbers and comment bodies fail before network calls", async () =>
   await assert.rejects(operations.getPullRequest(caller(), "keego/poster-brain", 0));
   await assert.rejects(operations.commentOnPullRequest(caller(), "keego/poster-brain", 3, " "));
   assert.equal(calls.length, 0);
+});
+
+
+test("safe App-token diagnostics reach the operation boundary without exposing upstream errors", async () => {
+  const { router, registry } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  const failed = new GitHubOperations(router, registry, {
+    forApp: async () => { throw new AppTokenError("APP_JWT_SIGNING_FAILED"); },
+  });
+  await assert.rejects(
+    failed.getPullRequest(caller(), "keego/poster-brain", 3),
+    (error: unknown) => error instanceof GithubOperationError &&
+      error.code === "APP_JWT_SIGNING_FAILED" &&
+      !String(error).includes("secret"),
+  );
+});
+
+test("registry failures return safe stage classification instead of raw SQL failures", async () => {
+  const { router } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  const failed = new GitHubOperations(router, {
+    getForTenant: async () => { throw new Error("sensitive: raw SQL details"); },
+    listForTenant: async () => [],
+  }, { forApp: async () => "unused" });
+  await assert.rejects(
+    failed.getPullRequest(caller(), "keego/poster-brain", 3),
+    (error: unknown) => error instanceof GithubOperationError && error.code === "APP_REGISTRY_FAILED",
+  );
 });
