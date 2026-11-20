@@ -49,7 +49,10 @@ export class GitHubOperations {
     private readonly router: IdentityRouter,
     private readonly registry: AppRegistry,
     private readonly tokens: TokenProvider,
-    private readonly httpFetch: typeof fetch = fetch,
+    // Cloudflare's native fetch requires its Worker-global receiver.
+    // Calling a copied native fetch as this.httpFetch(...) throws "Illegal invocation".
+    // Wrap the global invocation, while preserving injectable test clients.
+    private readonly httpFetch: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
   private async selectedApp(caller: VerifiedCaller, repository: string) {
