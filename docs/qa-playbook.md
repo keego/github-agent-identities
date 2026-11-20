@@ -31,6 +31,9 @@ If the current agent environment cannot access a working tree/npm dependencies, 
 
 ## One-shot integration debugging (before another live deployment)
 
+For Cloudflare Worker HTTP clients, **never store the native Worker-global `fetch` unwrapped in a class property and call it as a method**. It can throw `Illegal invocation` before any request is sent. Keep a synthetic outbound-fetch test in Miniflare/workerd that fails for an unbound receiver but passes for the production wrapper, using mocked GitHub API responses and **no live network**.
+
+
 For failures that cross ChatGPT → MCP → Cloudflare Access → D1 → GitHub App JWT → installation token → GitHub REST API:
 
 1. **Inventory existing evidence first.** Record the actual failing stage, sanitized error, authenticated chat binding, deployment SHA, CI result, and screenshots already supplied. Do not ask the operator to recheck permissions or repository selection already visible in a screenshot; distinguish configured settings from live token-effective access.
