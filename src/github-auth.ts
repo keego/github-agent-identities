@@ -40,7 +40,7 @@ export type TokenIssuer = (params: {
 export function prepareAppPrivateKey(privateKey: string): string {
   try {
     const normalized = privateKey.trim()
-      .replace(/\\r?\\n/g, "\n")
+      .replace(/\\r\\n|\\n/g, "\n")
       .replace(/\r\n?/g, "\n");
     const key = createPrivateKey(normalized);
     if (key.asymmetricKeyType !== "rsa") throw new Error("Unsupported key type");
