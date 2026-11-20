@@ -1,6 +1,6 @@
 # GHAI Sandbox Bot — development GitHub App onboarding
 
-> **Operator setup, not a new product integration.** This second App belongs only to the development repository. Preserve the existing Designer App and its verified `keego/poster-brain` PR read. No new GitHub App is presumed created, installed, provisioned or tested until the actual operator confirms it.
+> **Status (Nov 20, 2026):** The operator reports **GHAI Sandbox Bot** created and installed on `keego/github-agent-identities` (App ID `5855759`, installation ID `184190090`). The existing Designer App and its successful `keego/poster-brain` PR read remain untouched. **Cloudflare Sandbox key binding and App-backed test are not yet complete.** This is an operator runbook, not a claim of deployment success.
 
 ## A. Register the App (GitHub UI)
 
@@ -35,13 +35,13 @@ VALUES
   ('REPLACE_WITH_EXACT_VERIFIED_TENANT_ID',
    'ghai-sandbox',
    'GHAI Sandbox Bot',
-   REPLACE_WITH_APP_ID,
-   REPLACE_WITH_INSTALLATION_ID,
+   5855759,
+   184190090,
    'GH_APP_SANDBOX_PRIVATE_KEY',
    '["keego/github-agent-identities"]');
 ```
 
-Replace the **entire** quoted tenant-ID placeholder with the exact `get_my_tenant_id` result (which normally already includes the `cloudflare-access:` prefix); do not prepend that prefix twice. The signed user ID, numeric App and installation IDs must be verified before applying SQL. Do **not** alter or overwrite the existing `design` App row. The database stores a *secret binding name*, not a PEM or installation token. Missing IDs or unknown secret: **stop**, do not invent placeholders or attempt a write.
+Replace the **entire** quoted tenant-ID placeholder with the exact `get_my_tenant_id` result (which normally already includes the `cloudflare-access:` prefix); do not prepend that prefix twice. The App ID `5855759` and installation ID `184190090` were supplied by the operator. Verify the signed owner tenant ID, the protected Sandbox secret binding, and the target **staging** database before applying SQL. Do **not** alter or overwrite the existing `design` App row. The database stores a *secret binding name*, not a PEM or installation token. Missing IDs or unknown secret: **stop**, do not invent placeholders or attempt a write.
 
 ## D. Safe acceptance sequence
 
@@ -64,3 +64,7 @@ Replace the **entire** quoted tenant-ID placeholder with the exact `get_my_tenan
 | First capability | Verified PR read | PR read, then separately approved one-shot comment |
 
 The objective is to test **multiple Apps under one authenticated user** with separate credentials and repository scopes. It does not complete #16's **two-human** security acceptance; that remains deferred/open until a second actual person is invited.
+
+## GitHub installation-token format compatibility (Nov 2026)
+
+GitHub's [October 2, 2026 changelog](https://github.blog/changelog/2026-10-02-stateless-github-app-installation-tokens-rolled-out/) says new installation tokens now default to `ghs_APPID_JWT` and are approximately 520 characters; the optional format-override header is scheduled for deprecation on **November 30, 2026**. Our token provider treats tokens as opaque strings, caches them without length limits, and forwards the entire string as the Bearer authorization header. We added synthetic tests for **both** legacy opaque and 520+-character stateless formats. Do not inspect token contents, add fixed-length validation, introduce a length-limited database column or force legacy format through the temporary header. Real compatibility remains subject to the separately staged Sandbox App PR read.
