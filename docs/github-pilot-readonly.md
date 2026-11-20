@@ -65,7 +65,9 @@ To rotate the key, replace the Worker secret through the protected Cloudflare se
 
 GitHub-generated App keys are PKCS#1, while the WebCrypto signer accepts PKCS#8. The Worker converts a valid RSA private key **in memory** before calling Octokit and never writes the converted PEM to D1, GitHub Actions or logs. A malformed or non-RSA key fails with a fixed error code; the operator must correct the Cloudflare secret privately. <https://github.com/gr2m/universal-github-app-jwt#about-private-key-formats>
 
-If the authenticated, bound `github_get_pull_request` tool returns an error, record **only** the fixed error code (and PR number), never a PEM, JWT, installation token, Access assertion, or upstream error body.
+If the authenticated, bound `github_get_pull_request` tool returns an error, record **only** the fixed error code, the structured read-only diagnostics and PR number, never a PEM, JWT, installation token, Access assertion, or upstream error body.
+
+**One-shot failure checks:** After the authorized PR request fails, the same installation token performs at most two further GETs: `/repos/{owner}/{repo}` (repository visibility) and `/installation/repositories?per_page=100` (installation repository selection). The tool returns only HTTP status numbers and `repositorySelected: true | false | null`. A result of `false` means a **complete** repo listing did not include the target; if the listing is paginated or unreadable, `null` means unknown rather than assuming exclusion. GitHub may return 404 for resources hidden by permissions. These probes are not invoked for unbound chats, disallowed repositories, failed token issuance or successful PR reads. They never publish GitHub response bodies, tokens or other repository names.
 
 | Code | Safe interpretation | Operator follow-up |
 | --- | --- | --- |
