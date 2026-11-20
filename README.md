@@ -52,7 +52,7 @@ References: [OpenAI plugin submission](https://developers.openai.com/plugins/dep
 - [x] [#15](https://github.com/keego/github-agent-identities/issues/15) — Real local D1 tests, migrated staging D1 and deployed Worker; the first authenticated ChatGPT identity-tool smoke test was observed, but #16's full acceptance is open.
 - [ ] [#16](https://github.com/keego/github-agent-identities/issues/16) — Authenticated ChatGPT MCP access and isolated, verified tenants.
 - [x] [#17](https://github.com/keego/github-agent-identities/issues/17) — Bound Designer chat read PR #22 using the selected GitHub App (`ok: true`, Nov 20).
-- [ ] [#5](https://github.com/keego/github-agent-identities/issues/5) — Post a real PR comment as the selected GitHub App bot.
+- [ ] [#5](https://github.com/keego/github-agent-identities/issues/5) — A default-off, one-owner/one-test-PR bot-comment pilot is under review; no live comment or general write permission yet. See [operator safety checklist](docs/github-comment-pilot.md).
 - [ ] [#18](https://github.com/keego/github-agent-identities/issues/18) — Tested self-hosting and operator runbook.
 - [ ] [#7](https://github.com/keego/github-agent-identities/issues/7) — Validate a graphical identity picker and recovery UX.
 - [ ] [#1](https://github.com/keego/github-agent-identities/issues/1) — Public Plugin Directory strategy and optional dedicated domain.

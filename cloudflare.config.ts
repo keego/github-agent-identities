@@ -3,7 +3,8 @@ import { bindings, defineConfig } from "cf/config";
 /**
  * Private pilot configuration. All MCP access stays disabled until the
  * operator explicitly configures Cloudflare Access Managed OAuth and an
- * allowlist. Even then, GitHub write tools stay unregistered until #17.
+ * allowlist. #5 comment writes require a separate default-off staging flag,
+ * exact verified owner/PR and a one-shot D1 claim.
  *
  * Production and staging use DIFFERENT Worker and D1 resource names. Set
  * MCP_PUBLIC_HOSTNAME explicitly in each deployment environment.

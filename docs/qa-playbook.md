@@ -69,3 +69,9 @@ References: [GitHub Actions billing](https://docs.github.com/en/actions/concepts
 ## What still needs real-world testing
 
 An end-to-end private MCP release requires the actual Cloudflare Access application/Managed OAuth flow, invited-user policy, D1 registry onboarding, secure App PEM binding, and a **read-only** GitHub API request. Those acceptance tests are tracked by [#16](https://github.com/keego/github-agent-identities/issues/16) and [#17](https://github.com/keego/github-agent-identities/issues/17). Bot-attributed writes are separately gated by [#5](https://github.com/keego/github-agent-identities/issues/5).
+
+## GitHub App write pilot safety gate (#5)
+
+Review staged outbound writes independently from read-only success. Require a *default-off* deploy gate, one verified owner, exactly one invited user, exact repo/PR allowlist, bound App identity, fixed harmless body, explicit human consent in the bound chat, and a one-shot D1 attempt claim. Tests must prove each disabled/foreign/malformed path issues **zero POSTs**, and that token errors do not burn the claim while unknown POST outcomes prevent retries. Verify actual `[bot]` attribution from GitHub's response and comment page; a mocked author or CI pass alone is not acceptance.
+
+The pilot uses an additive D1 migration. Its table records only tenant/identity IDs, target, status, GitHub comment ID/URL/author, and timestamps; never store the raw body or any credential. The manual workflow must keep comment writes disabled by default, reject missing owner/target, and verify new binding state after deployment. No write is approved by merging code or enabling an MCP tool alone: require separate explicit confirmation of the exact PR/message. See [staging pilot runbook](github-comment-pilot.md).
