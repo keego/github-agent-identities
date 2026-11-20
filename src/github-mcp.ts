@@ -34,8 +34,13 @@ async function invoke<T>(
   try {
     return output({ ok: true, result: await work(caller) });
   } catch (error) {
-    const code = error instanceof GithubOperationError ? error.code : "INTERNAL_ERROR";
-    return output({ ok: false, error: code }, true);
+    if (error instanceof GithubOperationError) {
+      return output({
+        ok: false, error: error.code,
+        ...(error.diagnostics ? { diagnostics: error.diagnostics } : {}),
+      }, true);
+    }
+    return output({ ok: false, error: "INTERNAL_ERROR" }, true);
   }
 }
 

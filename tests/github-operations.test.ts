@@ -77,7 +77,8 @@ test("GitHub 403 responses are sanitized", async () => {
   const failure = new GitHubOperations(router, registry, { forApp: async () => "fake" },
     (async () => new Response("sensitive remote response", { status: 403 })) as typeof fetch);
   await assert.rejects(failure.getPullRequest(caller(), "keego/poster-brain", 3), (e: unknown) =>
-    e instanceof GithubOperationError && e.code === "GITHUB_REQUEST_FAILED");
+    e instanceof GithubOperationError && e.code === "GITHUB_REQUEST_FORBIDDEN" &&
+      !String(e).includes("sensitive remote response"));
 });
 
 test("invalid numbers and comment bodies fail before network calls", async () => {
@@ -114,4 +115,163 @@ test("registry failures return safe stage classification instead of raw SQL fail
     failed.getPullRequest(caller(), "keego/poster-brain", 3),
     (error: unknown) => error instanceof GithubOperationError && error.code === "APP_REGISTRY_FAILED",
   );
+});
+
+
+test("GitHub PR HTTP failures are classified without exposing upstream details", async () => {
+  const { router, registry } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  const cases: ReadonlyArray<{
+    status: number; headers?: Record<string, string>; expected: string;
+  }> = [
+    { status: 400, expected: "GITHUB_BAD_REQUEST" },
+    { status: 401, expected: "GITHUB_REQUEST_UNAUTHORIZED" },
+    { status: 403, expected: "GITHUB_REQUEST_FORBIDDEN" },
+    { status: 403, headers: { "x-ratelimit-remaining": "0" }, expected: "GITHUB_RATE_LIMITED" },
+    { status: 404, expected: "GITHUB_RESOURCE_NOT_FOUND_OR_INACCESSIBLE" },
+    { status: 422, expected: "GITHUB_BAD_REQUEST" },
+    { status: 429, expected: "GITHUB_RATE_LIMITED" },
+    { status: 502, expected: "GITHUB_SERVICE_UNAVAILABLE" },
+    { status: 418, expected: "GITHUB_REQUEST_FAILED" },
+  ];
+  for (const { status, headers, expected } of cases) {
+    const failure = new GitHubOperations(router, registry, { forApp: async () => "sensitive-token" },
+      (async () => new Response("secret, remote response or token", { status, headers })) as typeof fetch);
+    await assert.rejects(failure.getPullRequest(caller(), "keego/poster-brain", 22), (error: unknown) => {
+      assert.equal(error instanceof GithubOperationError, true);
+      assert.equal((error as GithubOperationError).code, expected);
+      assert.equal((error as Error).message, expected);
+      assert.equal(String(error).includes("secret"), false);
+      assert.equal(String(error).includes("sensitive-token"), false);
+      return true;
+    });
+  }
+});
+
+test("GitHub PR fetch transport failures still use safe generic errors", async () => {
+  const { router, registry } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  const failure = new GitHubOperations(router, registry, { forApp: async () => "sensitive-token" },
+    (async () => { throw new Error("private connection details"); }) as typeof fetch);
+  await assert.rejects(failure.getPullRequest(caller(), "keego/poster-brain", 22), (error: unknown) =>
+    error instanceof GithubOperationError && error.code === "GITHUB_REQUEST_FAILED" &&
+    !error.message.includes("private connection details"));
+});
+
+
+test("one failed PR read runs read-only visibility and installation-selection checks", async () => {
+  const { router, registry } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  const requests: Array<{ url: string; method: string; authorization: string | null }> = [];
+  const operations = new GitHubOperations(router, registry, { forApp: async () => "test-token" },
+    (async (url: RequestInfo | URL, init?: RequestInit) => {
+      requests.push({
+        url: String(url), method: init?.method ?? "GET",
+        authorization: new Headers(init?.headers).get("Authorization"),
+      });
+      if (String(url).endsWith("/pulls/22")) return new Response("upstream-secret", { status: 403 });
+      if (String(url).endsWith("/repos/keego/poster-brain")) return Response.json({ private: true });
+      if (String(url).endsWith("/installation/repositories?per_page=100")) {
+        return Response.json({ total_count: 1, repositories: [{ full_name: "keego/poster-brain" }] });
+      }
+      throw new Error("Unexpected API request");
+    }) as typeof fetch);
+  await assert.rejects(operations.getPullRequest(caller(), "keego/poster-brain", 22), (error: unknown) => {
+    assert.ok(error instanceof GithubOperationError);
+    assert.equal(error.code, "GITHUB_REQUEST_FORBIDDEN");
+    assert.deepEqual(error.diagnostics, {
+      pullRequest: { kind: "http", status: 403 },
+      repository: { status: 200 },
+      installation: { status: 200, repositorySelected: true, listComplete: true },
+    });
+    assert.equal(JSON.stringify(error.diagnostics).includes("upstream-secret"), false);
+    assert.equal(JSON.stringify(error.diagnostics).includes("test-token"), false);
+    return true;
+  });
+  assert.equal(requests.length, 3);
+  assert.ok(requests.every(request => request.method === "GET"));
+  assert.ok(requests.every(request => request.authorization === "Bearer test-token"));
+});
+
+test("installation repo membership is false only after a complete list, never a partial page", async () => {
+  const { router, registry } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  for (const totalCount of [0, 101]) {
+    const operation = new GitHubOperations(router, registry, { forApp: async () => "test-token" },
+      (async (url: RequestInfo | URL) => {
+        if (String(url).endsWith("/pulls/22")) return new Response("", { status: 404 });
+        if (String(url).endsWith("/repos/keego/poster-brain")) return new Response("", { status: 404 });
+        return Response.json({
+          total_count: totalCount,
+          repositories: totalCount === 101
+            ? Array.from({ length: 100 }, (_, i) => ({ full_name: "other/repo-" + i }))
+            : [],
+        });
+      }) as typeof fetch);
+    await assert.rejects(operation.getPullRequest(caller(), "keego/poster-brain", 22), (error: unknown) => {
+      assert.ok(error instanceof GithubOperationError);
+      assert.equal(error.code, "GITHUB_RESOURCE_NOT_FOUND_OR_INACCESSIBLE");
+      assert.deepEqual(error.diagnostics?.pullRequest, { kind: "http", status: 404 });
+      assert.equal(error.diagnostics?.repository.status, 404);
+      assert.equal(error.diagnostics?.installation.repositorySelected, totalCount === 0 ? false : null);
+      assert.equal(error.diagnostics?.installation.listComplete, totalCount === 0);
+      return true;
+    });
+  }
+});
+
+test("unexpected installation listing and transport failures never expose raw errors", async () => {
+  const { router, registry } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  const malformed = new GitHubOperations(router, registry, { forApp: async () => "token" },
+    (async (url: RequestInfo | URL) => {
+      if (String(url).endsWith("/pulls/22")) return new Response("{", { status: 200 });
+      if (String(url).endsWith("/repos/keego/poster-brain")) return new Response("", { status: 200 });
+      return Response.json({ total_count: 5, repositories: "raw-upstream-untrusted" });
+    }) as typeof fetch);
+  await assert.rejects(malformed.getPullRequest(caller(), "keego/poster-brain", 22), (error: unknown) => {
+    assert.ok(error instanceof GithubOperationError);
+    assert.equal(error.code, "GITHUB_REQUEST_FAILED");
+    assert.deepEqual(error.diagnostics, {
+      pullRequest: { kind: "invalid_json", status: 200 },
+      repository: { status: 200 },
+      installation: { status: 200, repositorySelected: null, listComplete: null },
+    });
+    assert.equal(JSON.stringify(error.diagnostics).includes("raw-upstream-untrusted"), false);
+    return true;
+  });
+  const offline = new GitHubOperations(router, registry, { forApp: async () => "token" },
+    (async () => { throw new Error("private-network-details"); }) as typeof fetch);
+  await assert.rejects(offline.getPullRequest(caller(), "keego/poster-brain", 22), (error: unknown) => {
+    assert.ok(error instanceof GithubOperationError);
+    assert.deepEqual(error.diagnostics, {
+      pullRequest: { kind: "transport", status: null },
+      repository: { status: null },
+      installation: { status: null, repositorySelected: null, listComplete: null },
+    });
+    assert.equal(JSON.stringify(error).includes("private-network-details"), false);
+    return true;
+  });
+});
+
+test("unbound and unauthorized repositories never make diagnostic API requests", async () => {
+  const { router, registry } = fixture();
+  let tokenCalls = 0, apiCalls = 0;
+  const operation = new GitHubOperations(router, registry, {
+    forApp: async () => { tokenCalls++; return "token"; },
+  }, (async () => { apiCalls++; throw new Error("must not run"); }) as typeof fetch);
+  await assert.rejects(operation.getPullRequest(caller(), "keego/poster-brain", 22),
+    (error: unknown) => error instanceof GithubOperationError && error.code === "IDENTITY_NOT_BOUND");
+  await router.bind(caller().metadata, "design", "tenant-A");
+  await assert.rejects(operation.getPullRequest(caller(), "other/repo", 22),
+    (error: unknown) => error instanceof GithubOperationError && error.code === "REPOSITORY_NOT_ALLOWED");
+  assert.equal(tokenCalls, 0);
+  assert.equal(apiCalls, 0);
+});
+
+test("successful PR read performs no additional installation diagnostics", async () => {
+  const { router, operations, calls } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  assert.equal((await operations.getPullRequest(caller(), "keego/poster-brain", 22)).title, "Test");
+  assert.equal(calls.length, 1);
 });

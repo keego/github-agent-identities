@@ -72,3 +72,18 @@ Read [`AGENTS.md`](../AGENTS.md) first. Then verify the issue/PR/deployment stat
 - The first live bound `github_get_pull_request` attempt after PR #34 returned `APP_JWT_SIGNING_FAILED`, **before installation-token exchange**. This narrows the observed failure to local signing, not GitHub repository authorization.
 - GitHub provides App private keys as PKCS#1 PEM, while WebCrypto requires PKCS#8. The Worker bundle's crypto module selection can differ from Node unit tests. Introduce an in-memory PEM normalization/conversion with `node:crypto.createPrivateKey`, validate RSA, and preserve sanitized error handling (`APP_KEY_FORMAT_INVALID` vs `APP_JWT_SIGNING_FAILED`). Never expose the PEM/JWT.
 - Add synthetic PKCS#1→PKCS#8/WebCrypto signing tests and a Miniflare Worker crypto check. Next: independent CI, then manual staging deploy if reviewed; retry bound PR #22 read and record the actual result. Do not assume this is the root cause until the live test passes.
+
+
+## November 20 — Real installation token acquired; PR request still denied/unresolved
+
+- The already-bound Designer chat's `github_get_pull_request` call for `keego/poster-brain` PR #22 returned `GITHUB_REQUEST_FAILED` after successful PR #35 staging deployment. This code proves the JWT signing and installation-token exchange passed, but does not establish which upstream HTTP status occurred (including possible network transport errors).
+- A separate human GitHub connector successfully read that PR's metadata and confirmed it exists/open. **This does not prove the App installation can access it.** The human connector cannot query installation ID `183125278` with its own credentials (403).
+- Classify fixed GitHub HTTP status codes (401/403/404/429/400/422/5xx) in the MCP read operation without returning raw response bodies, headers or tokens. Distinguish 404's missing-vs-hidden ambiguity, and preserve generic errors on network failure. Add mock tests. Keep #17 open and no writes registered.
+
+
+## November 20 — One-shot read-only diagnostics (extended PR #36)
+
+- After user feedback about iterative live-debug churn, expand PR #36 to include **bounded, automatic, read-only** follow-up probes after a failed App-authenticated PR request (repo metadata GET and installation repository-list GET).
+- Return PR request kind/status, repo visibility status, installation-list status and a tri-state repo-selection result. Never surface raw headers/bodies, tokens or other repo names.
+- A missing repository on a partial list is **unknown**, not proof of removal. All probes occur only after signed tenant authentication, conversation binding, repo allowlist, and token issuance. No additional GitHub write permissions or MCP tool-refresh steps.
+- PR #36 CI must test 403/404/transport/invalid JSON, scope listing completeness, denial before probes, and zero extra probes on success. Existing screenshot establishes configured App permissions and repo selection; do not ask the user to repeat that check. Distinguish configured selection from live installation-token access.
