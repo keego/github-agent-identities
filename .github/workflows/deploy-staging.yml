@@ -93,8 +93,8 @@ jobs:
             if ! curl --fail --silent --show-error --max-time 25 \
               --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/github-agent-identities-staging/secrets" \
-              | jq -e '(.success == true) and ((.result // []) | any(.name == "GH_APP_DESIGN_PRIVATE_KEY"))' >/dev/null; then
-              echo '::error::Read-only pilot requires an existing GH_APP_DESIGN_PRIVATE_KEY staging Worker secret binding'
+              | jq -e '(.success == true) and ((.result // []) as $s | all(["GH_APP_DESIGN_PRIVATE_KEY", "GH_APP_SANDBOX_PRIVATE_KEY"][]; . as $n | any($s[]; .name == $n and .type == "secret_text")))' >/dev/null; then
+              echo '::error::Read-only staging requires both protected GitHub App private-key bindings'
               exit 1
             fi
           fi
