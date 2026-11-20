@@ -29,6 +29,18 @@ For focused iterations, use `npm run typecheck`, `npm test` or `npm run test:d1`
 
 If the current agent environment cannot access a working tree/npm dependencies, **state that explicitly** rather than claiming local tests were run. Do a static source/test review and batch changes where possible; request an independent local execution pass for unverified code. Do not use a succession of GitHub Actions failures as a live debugger.
 
+## One-shot integration debugging (before another live deployment)
+
+For failures that cross ChatGPT → MCP → Cloudflare Access → D1 → GitHub App JWT → installation token → GitHub REST API:
+
+1. **Inventory existing evidence first.** Record the actual failing stage, sanitized error, authenticated chat binding, deployment SHA, CI result, and screenshots already supplied. Do not ask the operator to recheck permissions or repository selection already visible in a screenshot; distinguish configured settings from live token-effective access.
+2. **Enumerate adjacent failure classes together**, not just the one currently observed: missing/malformed PEM, Worker crypto compatibility, App/installation auth, repo selection, endpoint permission, HTTP 401/403/404/429/5xx, invalid upstream JSON and network transport. Add fixed-stage codes and bounded probes where a single response would otherwise require another deploy.
+3. **Keep probes inside the existing trust boundary.** Probes must be read-only, use only the authenticated tenant's bound App and allowlisted repository, and return fixed enums/statuses/booleans—not raw headers, GitHub bodies, private repository lists, JWTs, PEMs, tokens or personal identifiers. Treat ambiguous 404 and incomplete pagination as *unknown*, not proof of absence.
+4. **Test at every relevant boundary** with synthetic credentials: unit tests for classifications and failure modes; Miniflare/Worker crypto/runtime tests for environment-specific behavior; a real MCP client/handler test verifying diagnostics survive serialization; negative tests ensuring unauthenticated, unbound and unauthorized callers never trigger network requests.
+5. **Batch the complete diagnostic increment into one reviewable PR**, run local preflight when possible and require full CI before merge. Use a single manual staging deploy only after the PR passes, then have the already-bound chat repeat one call. Don't rotate credentials, relax Access, widen GitHub permissions or enable writes as a diagnostic shortcut.
+
+A deployment can establish a real-world acceptance result, but should not be used as the primary test harness. If an error persists, gather the full structured result first rather than opening another single-stage fix by reflex.
+
 ## Actions scheduling and what it costs
 
 The `.github/workflows/ci.yml` job now:
