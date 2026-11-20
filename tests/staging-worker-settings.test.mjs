@@ -96,7 +96,8 @@ test('pilot activation requires owner, target, read flag and exactly one Access-
   const expected = fixture('after');
   for (const key of [
     'GH_APP_COMMENT_PILOT_ENABLED','GH_APP_COMMENT_PILOT_OWNER_TENANT_ID',
-    'GH_APP_COMMENT_PILOT_REPOSITORY','GH_APP_COMMENT_PILOT_NUMBER'
+    'GH_APP_COMMENT_PILOT_REPOSITORY','GH_APP_COMMENT_PILOT_NUMBER',
+    'ALLOWED_ACCESS_EMAILS',
   ]) expected.result.bindings.find(b => b.name === key).text = config[key];
   verifyStagingSettings(expected, config, 'after');
   assert.throws(() => verifyStagingSettings(expected, env, 'after'));
