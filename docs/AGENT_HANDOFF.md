@@ -1,6 +1,6 @@
 # Agent Handoff — GitHub Agent Identities
 
-> **Checkpoint: November 19, 2026.** This file is a concise continuity anchor, not a substitute for checking current GitHub issues, source, deployment, or actual test results. Keep operational facts dated and verified.
+> **Latest checkpoint: November 20, 2026 — App-backed PR read succeeded.** Historical sections below contain older, superseded observations. Reconcile against live issues, code and deployment before acting.
 
 ## Product charter
 
@@ -23,17 +23,17 @@ The intended **end-user** workflow is simple: connect the plugin, onboard Apps, 
 
 | Area | Evidence-backed state | Remaining acceptance |
 | --- | --- | --- |
-| MCP core, role binding, D1 adapter, GitHub App token/client | Implemented; synthetic tests + local D1 CI. See [README](../README.md), [roadmap](roadmap.md) and merged PRs | Real end-to-end App calls, persistence in authenticated chats |
-| Cloudflare staging | Real Worker deployed and D1 bound; [manual deploy](https://github.com/keego/github-agent-identities/actions/runs/44378420871) reported 46 passing tests | Keep Access boundary and preview-URL restrictions intact |
+| MCP core, role binding, D1 adapter, GitHub App token/client | Implemented, CI-tested; authenticated bound Designer chat persisted and read real PR #22 | Continued regression/security checks, no GitHub writes yet |
+| Cloudflare staging | Real Access-protected Worker deployed with D1, [staging run #44798464823](https://github.com/keego/github-agent-identities/actions/runs/44798464823) succeeded | Preserve Access boundary and preview-URL restrictions |
 | ChatGPT OAuth / #16 | A real authenticated ChatGPT client successfully invoked `identify_chat`, `list_identities`, and `get_my_tenant_id` via the staging plugin in a session on Nov 19. `list_identities` returned an empty registry, as expected | Cross-user isolation, reconnect/refresh, revocation/negative-path live tests before closing [#16](https://github.com/keego/github-agent-identities/issues/16) |
-| GitHub App pilot / #17 | Existing **Poster Brain - UI/UX Designer** App: App ID `5808833`; user-confirmed installation ID `183125278`; proposed allowed repo `keego/poster-brain`. Source implements read-only tool behind opt-in | Confirm installation/repo access; provision App key in Worker secret; add tenant-scoped D1 identity; enable read-only tool; observe real PR read. [#17](https://github.com/keego/github-agent-identities/issues/17) |
+| GitHub App pilot / #17 | **Complete.** The bound Designer chat read PR #22 with `ok:true` using App `5808833` and installation `183125278`; [#17](https://github.com/keego/github-agent-identities/issues/17) closed | Keep repo allowlist and secret controls, no human connector fallback |
 | GitHub write / #5 | Mock-tested operations exist, but authenticated Worker deliberately does **not** register write tools | Separate review, explicit harmless test comment, and observed author ending in `[bot]`. [#5](https://github.com/keego/github-agent-identities/issues/5) |
 
-**Operational notes (verify before acting):** Staging has exposed only identity tools; an observed `list_identities` response was empty. The [manual staging deployment workflow](../.github/workflows/deploy-staging.yml) explicitly forces `GH_APP_READONLY_ENABLED=false`. A November 19 inspection found no GitHub App PEM secret bound to staging. These are not evidence of a defective OAuth integration. The operator reported never downloading a GitHub App PEM; do not assume one exists or casually generate/rotate keys without first checking actual credential requirements.
+**Historical staging note (Nov 19, superseded):** The Worker initially exposed only identity tools and had no GitHub App registry or private-key binding. These changed before Nov 20's successful read. The current staging path is read-only enabled, with no bot-write tool registered. Do not regenerate keys based on the obsolete initial state.
 
 ## Next milestone
 
-Continue [#17 — authenticated read-only GitHub App pilot](https://github.com/keego/github-agent-identities/issues/17), respecting the current workflow's safe defaults. Verify the existing App/installation permissions and credential availability, provision only what is actually needed, register the existing Designer identity for the verified tenant, enable the read-only tool through a reviewed deployment change, then read a real PR. **Do not open GitHub write access before the separate #5 gate.**
+Finish [#16 — authenticated two-human and revocation acceptance](https://github.com/keego/github-agent-identities/issues/16) before the separately gated [#5 — first bot-authored PR comment](https://github.com/keego/github-agent-identities/issues/5). Real App-backed PR reads work, but a single owner ChatGPT session is **not** proof of cross-user isolation or live token revocation. A second independently invited human is required for live #16 acceptance. **Do not enable comment writes until the separate #5 authorization and test gate.**
 
 ## Deliberately deferred
 
@@ -45,7 +45,7 @@ Continue [#17 — authenticated read-only GitHub App pilot](https://github.com/k
 ## Known documentation drift / pitfalls
 
 - README and operator docs were refreshed after the first single-user authenticated tool-call smoke. This does **not** establish completion of #16's multi-user and revocation acceptance.
-- Earlier dated snapshots and issue comments may still describe an undeployed Worker or unwired App reads. Current staging is deployed, and App read code is wired behind a disabled flag; always distinguish historic text from live evidence.
+- Earlier dated snapshots and issue comments may still describe an undeployed Worker or disabled App reads. Current staging is deployed, and the read-only App call succeeded live; always distinguish historic text from live evidence.
 - A connected GitHub App **installation** and a router-configured **credential/identity record** are different. Do not equate App existence with a working installation-token exchange.
 - The first pilot's manual credential provisioning is an intentional technical milestone, **not** the eventual zero-friction end-user onboarding UX.
 
