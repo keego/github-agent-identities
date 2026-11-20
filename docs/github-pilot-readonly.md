@@ -1,6 +1,6 @@
 # Read-only GitHub App pilot — Issue #17
 
-> **Status: integration code and mocked tests only.** A live GitHub App read requires a deployed Cloudflare Access-protected Worker, an invited account, a selected App installation, and a securely provisioned PEM key. **No GitHub App secret or real token is in the repository.**
+> **Status (Nov 20, 2026): complete.** The authenticated, bound Designer ChatGPT conversation successfully read PR #22 through the actual GitHub App (`ok:true`); #17 is closed. No App secret or token has been placed in the repository. Subsequent guarded bot-comment experiments are separately tracked under [#5](https://github.com/keego/github-agent-identities/issues/5).
 
 ## What this stage adds
 

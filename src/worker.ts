@@ -5,7 +5,8 @@
  * edge. This Worker independently verifies every signed identity assertion
  * and an explicit operator allowlist before even constructing MCP tools.
  *
- * GitHub App tools are deliberately NOT registered until issue #17.
+ * Read-only App tools are proven. The #5 comment pilot is gated by separate,
+ * default-off, one-owner/one-target settings and a D1 one-attempt claim.
  */
 import {
   createMcpHandler,
@@ -18,6 +19,7 @@ import { D1AppRegistry } from "./github-apps.ts";
 import { createTenantRouter } from "./tenant-router.ts";
 import { InstallationTokenProvider } from "./github-auth.ts";
 import { GitHubOperations } from "./github-operations.ts";
+import { authorizedPilotScope, D1PilotCommentClaims } from "./comment-pilot.ts";
 import { createIdentityMcpServer } from "./server.ts";
 import { accessSettings, authenticateAccess } from "./access-auth.ts";
 
@@ -30,6 +32,10 @@ export type WorkerEnv = {
   ALLOWED_ACCESS_EMAILS?: string;
   /** Opt-in read-only GitHub App tools; false by default. */
   GH_APP_READONLY_ENABLED?: string;
+  GH_APP_COMMENT_PILOT_ENABLED?: string;
+  GH_APP_COMMENT_PILOT_OWNER_TENANT_ID?: string;
+  GH_APP_COMMENT_PILOT_REPOSITORY?: string;
+  GH_APP_COMMENT_PILOT_NUMBER?: string;
   /** Cloudflare secret bindings selected by operator-owned D1 registry. */
   [secretBindingName: string]: unknown;
   /** Deprecated POC switch: intentionally ignored in the private Worker. */
@@ -83,8 +89,9 @@ export async function handlePrivateWorker(
     // Schema errors and DB availability problems must not leak internals.
     return denied(503, "STORAGE_UNAVAILABLE");
   }
-  // A positive operator opt-in is required before loading App secrets.
-  // This stage exposes PR reads only, never comments/PR writes.
+  // Any comment pilot also requires a verified owner, exactly one invited
+  // human, an explicit read flag, and a single configured target PR.
+  const pilotScope = authorizedPilotScope(env, tenantId, settings.allowedEmails.size);
   const registry = new D1AppRegistry(env.DB);
   const readOnlyGitHub = env.GH_APP_READONLY_ENABLED === "true"
     ? new GitHubOperations(
@@ -95,10 +102,12 @@ export async function handlePrivateWorker(
         const secret = env[reference];
         return typeof secret === "string" && secret.length > 0 ? secret : null;
       }),
+      undefined,
+      pilotScope ? { ...pilotScope, claims: new D1PilotCommentClaims(env.DB) } : undefined,
     )
     : undefined;
   const handler = createMcpHandler(
-    () => createIdentityMcpServer(router, readOnlyGitHub, tenantId),
+    () => createIdentityMcpServer(router, readOnlyGitHub, tenantId, pilotScope !== null),
     { responseMode: "json" },
   );
   return handler.fetch(request);

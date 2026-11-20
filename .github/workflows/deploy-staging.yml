@@ -18,6 +18,11 @@ on:
         required: true
         type: boolean
         default: false
+      enable_github_app_pilot_comment:
+        description: 'HIGH-RISK: manually expose one approved bot test comment tool for one owner and one test PR'
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -44,6 +49,11 @@ jobs:
       MCP_PUBLIC_HOSTNAME: ${{ vars.MCP_PUBLIC_HOSTNAME }}
       # Default stays disabled. A manually requested pilot can expose ONLY read-only PR tools.
       GH_APP_READONLY_ENABLED: ${{ inputs.enable_github_app_reads && 'true' || 'false' }}
+      # Default-off write pilot. Owner principal is a GitHub Actions secret, not a tool argument.
+      GH_APP_COMMENT_PILOT_ENABLED: ${{ inputs.enable_github_app_pilot_comment && 'true' || 'false' }}
+      GH_APP_COMMENT_PILOT_OWNER_TENANT_ID: ${{ secrets.GH_APP_COMMENT_PILOT_OWNER_TENANT_ID }}
+      GH_APP_COMMENT_PILOT_REPOSITORY: ${{ vars.GH_APP_COMMENT_PILOT_REPOSITORY }}
+      GH_APP_COMMENT_PILOT_NUMBER: ${{ vars.GH_APP_COMMENT_PILOT_NUMBER }}
       APPROVE_VERIFIED_CONFIG_OVERRIDE: ${{ inputs.approve_verified_config_override && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v7
@@ -68,6 +78,15 @@ jobs:
             github-agent-identities-staging.*.workers.dev) ;;
             *) echo "::error::MCP_PUBLIC_HOSTNAME is not the staging workers.dev hostname"; exit 1 ;;
           esac
+          if [ "$GH_APP_COMMENT_PILOT_ENABLED" = 'true' ]; then
+            if [ "$GH_APP_READONLY_ENABLED" != 'true' ] ||
+               [ "$APPROVE_VERIFIED_CONFIG_OVERRIDE" != 'true' ] ||
+               [ "${{ inputs.takeover_api_bootstrap }}" != 'false' ]; then
+              echo '::error::Pilot comment writes require read mode, reviewed override and no bootstrap takeover'
+              exit 1
+            fi
+          fi
+          node scripts/verify-staging-worker-settings.mjs validate-pilot
           if [ "$GH_APP_READONLY_ENABLED" = 'true' ]; then
             # Check the pre-existing Worker secret *name*, never read or print its value.
             # Do not put App PEMs in GitHub Actions secrets or workflow variables.
@@ -98,13 +117,13 @@ jobs:
         if: ${{ !inputs.takeover_api_bootstrap && inputs.approve_verified_config_override }}
         # --force is permitted only after the exact, remote-settings preflight above.
         # It must never provision another D1 database or bypass Access protection.
-        run: npx cf deploy --mode staging --no-provision --force --message 'Approved verified staging read-only configuration change'
+        run: npx cf deploy --mode staging --no-provision --force --message 'Approved verified staging configuration change'
       - name: One-time takeover of API-created staging bootstrap
         if: ${{ inputs.takeover_api_bootstrap }}
         # --force ONLY bypasses API-created Worker conflict after explicit approval.
         # --no-provision still prohibits silently creating new D1 resources.
         run: npx cf deploy --mode staging --no-provision --force --message 'Approved one-time API bootstrap takeover'
-      - name: Confirm read-only staging bindings after deployment
+      - name: Confirm staging bindings, including write opt-out, after deployment
         if: ${{ inputs.enable_github_app_reads }}
         run: node scripts/verify-staging-worker-settings.mjs after
       - name: Confirm anonymous requests are blocked by Cloudflare Access

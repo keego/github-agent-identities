@@ -1,6 +1,10 @@
 import { type ClientMetadata, IdentityRouter } from "./core.ts";
 import { AppTokenError, type AppTokenErrorCode } from "./github-auth.ts";
 import { type AppIdentity, type AppRegistry, assertRepositoryAllowed } from "./github-apps.ts";
+import {
+  PILOT_COMMENT_TEXT, PILOT_COMMENT_CONFIRMATION,
+  type CommentPilotScope, type PilotCommentClaims,
+} from "./comment-pilot.ts";
 
 export interface TokenProvider {
   forApp(identity: AppIdentity): Promise<string>;
@@ -21,6 +25,7 @@ export type PullRequestSummary = {
   body: string | null;
 };
 export type CommentSummary = { id: number; url: string; author: string | null };
+export type PilotCommentSummary = CommentSummary & { botAttributed: boolean; auditRecorded: boolean };
 /** Deliberately limited to safe statuses/booleans; no upstream body or auth fields. */
 export type GitHubReadDiagnostics = Readonly<{
   pullRequest: { kind: "http" | "transport" | "invalid_json"; status: number | null };
@@ -36,7 +41,10 @@ export class GithubOperationError extends Error {
     "APP_REGISTRY_FAILED" | AppTokenErrorCode |
     "GITHUB_REQUEST_UNAUTHORIZED" | "GITHUB_REQUEST_FORBIDDEN" |
     "GITHUB_RESOURCE_NOT_FOUND_OR_INACCESSIBLE" | "GITHUB_RATE_LIMITED" |
-    "GITHUB_BAD_REQUEST" | "GITHUB_SERVICE_UNAVAILABLE",
+    "GITHUB_BAD_REQUEST" | "GITHUB_SERVICE_UNAVAILABLE" |
+    "PILOT_WRITE_DISABLED" | "PILOT_TARGET_NOT_ALLOWED" |
+    "PILOT_CONFIRMATION_REQUIRED" | "PILOT_ALREADY_ATTEMPTED" |
+    "PILOT_AUDIT_UNAVAILABLE",
     public readonly requestFailure?: RequestFailure,
     public readonly diagnostics?: GitHubReadDiagnostics,
   ) {
@@ -53,6 +61,7 @@ export class GitHubOperations {
     // Calling a copied native fetch as this.httpFetch(...) throws "Illegal invocation".
     // Wrap the global invocation, while preserving injectable test clients.
     private readonly httpFetch: typeof fetch = (input, init) => fetch(input, init),
+    private readonly pilot?: CommentPilotScope & { claims: PilotCommentClaims },
   ) {}
 
   private async selectedApp(caller: VerifiedCaller, repository: string) {
@@ -83,6 +92,7 @@ export class GitHubOperations {
     path: string,
     method: "GET" | "POST",
     body?: unknown,
+    beforeDispatch?: () => Promise<void>,
   ): Promise<T> {
     let token: string;
     try {
@@ -91,6 +101,9 @@ export class GitHubOperations {
       if (error instanceof AppTokenError) throw new GithubOperationError(error.code);
       throw error;
     }
+    // Claim only after successful App-token issuance, and before any GitHub POST.
+    // A failed/unknown POST must never be automatically retried.
+    if (beforeDispatch) await beforeDispatch();
     let response: Response;
     try {
       response = await this.httpFetch("https://api.github.com" + path, {
@@ -213,6 +226,49 @@ export class GitHubOperations {
     return {
       number: data.number, title: data.title, state: data.state,
       url: data.html_url, body: data.body, author: data.user?.login ?? null,
+    };
+  }
+
+  /** A single fixed-text pilot comment, restricted to one verified owner and PR. */
+  async commentOnPilotPullRequest(
+    caller: VerifiedCaller, repository: string, number: number, confirmation: string,
+  ): Promise<PilotCommentSummary> {
+    const scope = this.pilot;
+    if (!scope || caller.tenantId !== scope.ownerTenantId) {
+      throw new GithubOperationError("PILOT_WRITE_DISABLED");
+    }
+    if (repository.toLowerCase() !== scope.repository || number !== scope.number) {
+      throw new GithubOperationError("PILOT_TARGET_NOT_ALLOWED");
+    }
+    if (confirmation !== PILOT_COMMENT_CONFIRMATION) {
+      throw new GithubOperationError("PILOT_CONFIRMATION_REQUIRED");
+    }
+    const identity = await this.selectedApp(caller, repository);
+    const data = await this.githubRequest<{ id: number; html_url: string; user?: { login: string } }>(
+      identity, "/repos/" + repository + "/issues/" + number + "/comments",
+      "POST", { body: PILOT_COMMENT_TEXT },
+      async () => {
+        try {
+          const claimed = await scope.claims.claim(caller.tenantId, scope.repository, scope.number, identity.identityId);
+          if (!claimed) throw new GithubOperationError("PILOT_ALREADY_ATTEMPTED");
+        } catch (error) {
+          if (error instanceof GithubOperationError) throw error;
+          throw new GithubOperationError("PILOT_AUDIT_UNAVAILABLE");
+        }
+      },
+    );
+    let auditRecorded = true;
+    try {
+      await scope.claims.complete(caller.tenantId, scope.repository, scope.number,
+        data.id, data.html_url, data.user?.login ?? null);
+    } catch {
+      // GitHub already posted; avoid obscuring success or retrying automatically.
+      auditRecorded = false;
+    }
+    const author = data.user?.login ?? null;
+    return {
+      id: data.id, url: data.html_url, author,
+      botAttributed: author?.endsWith("[bot]") ?? false, auditRecorded,
     };
   }
 

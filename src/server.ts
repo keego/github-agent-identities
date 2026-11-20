@@ -22,7 +22,10 @@ function errorResult(error: unknown) {
   return { ...result({ ok: false, error: "INTERNAL_ERROR" }), isError: true };
 }
 
-export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubOperations, trustedTenantId?: string): McpServer {
+export function createIdentityMcpServer(
+  router: IdentityRouter, github?: GitHubOperations, trustedTenantId?: string,
+  pilotCommentEnabled = false,
+): McpServer {
   // Production uses a verified tenant captured by the authenticated HTTP boundary.
   // Local development can still use the earlier metadata-only POC contract.
   const tenantFor = (extra: unknown) => trustedTenantId ?? verifiedTenantFromContext(extra);
@@ -109,6 +112,6 @@ export function createIdentityMcpServer(router: IdentityRouter, github?: GitHubO
     );
   }
 
-  if (github && trustedTenantId) registerGitHubReadTools(server, github, trustedTenantId);
+  if (github && trustedTenantId) registerGitHubReadTools(server, github, trustedTenantId, pilotCommentEnabled);
   return server;
 }

@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { verifyStagingSettings, verifyLiveStaging } from '../scripts/verify-staging-worker-settings.mjs';
+import { verifyStagingSettings, verifyLiveStaging, validateStagingWritePilotEnv } from '../scripts/verify-staging-worker-settings.mjs';
 
 const env = {
   CLOUDFLARE_API_TOKEN: 'fake-test-token', CLOUDFLARE_ACCOUNT_ID: 'test-account',
   ACCESS_ISSUER: 'https://example.cloudflareaccess.com', ACCESS_AUDIENCE: 'test-audience',
   ALLOWED_ACCESS_EMAILS: 'invited@example.test', MCP_PUBLIC_HOSTNAME: 'github-agent-identities-staging.example.workers.dev',
   STAGING_D1_DATABASE_ID: 'test-database-id',
+  GH_APP_READONLY_ENABLED: 'true',
+  GH_APP_COMMENT_PILOT_ENABLED: 'false',
+  GH_APP_COMMENT_PILOT_OWNER_TENANT_ID: '',
+  GH_APP_COMMENT_PILOT_REPOSITORY: '',
+  GH_APP_COMMENT_PILOT_NUMBER: '',
 };
 const binding = (name, value) => ({ name, type: 'plain_text', text: value });
 function fixture(phase = 'before') {
@@ -19,6 +24,12 @@ function fixture(phase = 'before') {
       { name: 'GH_APP_DESIGN_PRIVATE_KEY', type: 'secret_text' },
       binding('GH_APP_READONLY_ENABLED', phase === 'before' ? 'false' : 'true'),
       binding('MCP_PUBLIC_HOSTNAME', env.MCP_PUBLIC_HOSTNAME),
+      ...(phase === 'before' ? [] : [
+        binding('GH_APP_COMMENT_PILOT_ENABLED', env.GH_APP_COMMENT_PILOT_ENABLED),
+        binding('GH_APP_COMMENT_PILOT_OWNER_TENANT_ID', env.GH_APP_COMMENT_PILOT_OWNER_TENANT_ID),
+        binding('GH_APP_COMMENT_PILOT_REPOSITORY', env.GH_APP_COMMENT_PILOT_REPOSITORY),
+        binding('GH_APP_COMMENT_PILOT_NUMBER', env.GH_APP_COMMENT_PILOT_NUMBER),
+      ]),
     ],
   }};
 }
@@ -60,4 +71,43 @@ test('manual workflow runs the tested verifier rather than inline multiline curl
   assert.match(workflow, /run: node scripts\/verify-staging-worker-settings\.mjs before/);
   assert.match(workflow, /run: node scripts\/verify-staging-worker-settings\.mjs after/);
   assert.doesNotMatch(workflow, /\\\\$/m);
+});
+
+test('pilot activation requires owner, target, read flag and exactly one Access-invited user', () => {
+  validateStagingWritePilotEnv(env); // default off
+  const config = {
+    ...env, GH_APP_COMMENT_PILOT_ENABLED: 'true',
+    GH_APP_COMMENT_PILOT_OWNER_TENANT_ID: 'cloudflare-access:synthetic-owner',
+    GH_APP_COMMENT_PILOT_REPOSITORY: 'keego/poster-brain',
+    GH_APP_COMMENT_PILOT_NUMBER: '22',
+    ALLOWED_ACCESS_EMAILS: 'owner@example.test',
+  };
+  validateStagingWritePilotEnv(config);
+  for (const patch of [
+    { GH_APP_READONLY_ENABLED: 'false' },
+    { GH_APP_COMMENT_PILOT_OWNER_TENANT_ID: '' },
+    { GH_APP_COMMENT_PILOT_OWNER_TENANT_ID: 'not-verified' },
+    { GH_APP_COMMENT_PILOT_REPOSITORY: 'keego/../repo' },
+    { GH_APP_COMMENT_PILOT_NUMBER: '0' },
+    { GH_APP_COMMENT_PILOT_NUMBER: '2e3' },
+    { ALLOWED_ACCESS_EMAILS: 'a@example.test,b@example.test' },
+  ]) assert.throws(() => validateStagingWritePilotEnv({ ...config, ...patch }));
+
+  const expected = fixture('after');
+  for (const key of [
+    'GH_APP_COMMENT_PILOT_ENABLED','GH_APP_COMMENT_PILOT_OWNER_TENANT_ID',
+    'GH_APP_COMMENT_PILOT_REPOSITORY','GH_APP_COMMENT_PILOT_NUMBER',
+    'ALLOWED_ACCESS_EMAILS',
+  ]) expected.result.bindings.find(b => b.name === key).text = config[key];
+  verifyStagingSettings(expected, config, 'after');
+  assert.throws(() => verifyStagingSettings(expected, env, 'after'));
+});
+
+test('manual staging deploy never enables comments by default and requires explicit review', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/deploy-staging.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /enable_github_app_pilot_comment:/);
+  assert.match(workflow, /GH_APP_COMMENT_PILOT_ENABLED:.*enable_github_app_pilot_comment.*'false'/);
+  assert.match(workflow, /node scripts\/verify-staging-worker-settings\.mjs validate-pilot/);
+  assert.match(workflow, /GH_APP_COMMENT_PILOT_OWNER_TENANT_ID:.*secrets\./);
+  assert.match(workflow, /APPROVE_VERIFIED_CONFIG_OVERRIDE/);
 });
