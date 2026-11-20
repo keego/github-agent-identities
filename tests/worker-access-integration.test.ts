@@ -418,3 +418,65 @@ test("two bound tenants cannot read each other's GitHub App repositories", async
     await bob.client.close();
   }
 });
+
+test("owner-only pilot tool appears only with every runtime gate, before any real GitHub write", async () => {
+  const { env, token, clientFor } = await setup();
+  Object.assign(env, {
+    GH_APP_READONLY_ENABLED: "true",
+    GH_APP_COMMENT_PILOT_ENABLED: "true",
+    GH_APP_COMMENT_PILOT_OWNER_TENANT_ID: "cloudflare-access:alice-id",
+    GH_APP_COMMENT_PILOT_REPOSITORY: "keego/poster-brain",
+    GH_APP_COMMENT_PILOT_NUMBER: "22",
+    ALLOWED_ACCESS_EMAILS: "alice@example.com",
+  });
+  const alice = clientFor(await token("alice-id", "alice@example.com"));
+  const meta = { "openai/subject": "synthetic-user", "openai/session": "pilot-chat" };
+  try {
+    await alice.client.connect(alice.transport);
+    const available = await alice.client.listTools();
+    assert.equal(available.tools.some(t => t.name === "github_get_pull_request"), true);
+    assert.equal(available.tools.some(t => t.name === "github_post_pilot_comment"), true);
+    assert.equal(available.tools.some(t => t.name === "github_comment_on_pr"), false);
+    const invoke = async (repository: string, number: number) => {
+      const out = await alice.client.callTool({
+        name: "github_post_pilot_comment",
+        arguments: { repository, number, confirmation: "POST_APPROVED_PILOT_COMMENT" },
+        _meta: meta,
+      });
+      assert.equal(out.isError, true);
+      return JSON.parse(out.content?.[0]?.type === "text" ? out.content[0].text : "{}") as { error?: string };
+    };
+    assert.equal((await invoke("keego/poster-brain", 22)).error, "IDENTITY_NOT_BOUND");
+    const bound = await alice.client.callTool({
+      name: "bind_identity", arguments: { identityId: "design" }, _meta: meta,
+    });
+    assert.notEqual(bound.isError, true);
+    assert.equal((await invoke("keego/poster-brain", 23)).error, "PILOT_TARGET_NOT_ALLOWED");
+    // No PEM was provided: the token issuance fails BEFORE D1 claim or HTTP.
+    assert.equal((await invoke("keego/poster-brain", 22)).error, "APP_SECRET_UNAVAILABLE");
+  } finally {
+    await alice.client.close();
+  }
+});
+
+test("pilot write tools stay hidden for multi-user allowlists or foreign signed tenants", async () => {
+  const { env, token, clientFor } = await setup();
+  Object.assign(env, {
+    GH_APP_READONLY_ENABLED: "true",
+    GH_APP_COMMENT_PILOT_ENABLED: "true",
+    GH_APP_COMMENT_PILOT_OWNER_TENANT_ID: "cloudflare-access:alice-id",
+    GH_APP_COMMENT_PILOT_REPOSITORY: "keego/poster-brain",
+    GH_APP_COMMENT_PILOT_NUMBER: "22",
+  });
+  const a = clientFor(await token("alice-id", "alice@example.com"));
+  const b = clientFor(await token("bob-id", "bob@example.com"));
+  try {
+    await a.client.connect(a.transport);
+    await b.client.connect(b.transport);
+    assert.equal((await a.client.listTools()).tools.some(t => t.name === "github_post_pilot_comment"), false);
+    assert.equal((await b.client.listTools()).tools.some(t => t.name === "github_post_pilot_comment"), false);
+  } finally {
+    await a.client.close();
+    await b.client.close();
+  }
+});
