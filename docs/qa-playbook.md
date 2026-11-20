@@ -29,6 +29,12 @@ For focused iterations, use `npm run typecheck`, `npm test` or `npm run test:d1`
 
 If the current agent environment cannot access a working tree/npm dependencies, **state that explicitly** rather than claiming local tests were run. Do a static source/test review and batch changes where possible; request an independent local execution pass for unverified code. Do not use a succession of GitHub Actions failures as a live debugger.
 
+## Tenant isolation and revocation test matrix
+
+For an authenticated multi-user MCP service, tests must cover **two independent signed users with identical spoofable MCP metadata**: disjoint identity lists, bindings, GitHub repository allowlists and private App secret references. Verify reconnect with a fresh signed Access assertion and a new MCP client, and a different verified subject (even reusing an allowlisted email) cannot inherit the existing binding.
+
+Exercise every trust boundary after configuration changes: deny an otherwise-valid signed JWT immediately when its Worker email allowlist entry is removed; reject expired or wrong-audience assertions before constructing tools; and verify that no GitHub request is reached on foreign-tenant/repository calls. Synthetic tests cannot substitute for two actual user sessions and Access refresh/revocation in the deployed system. Preserve read/write staging gates; do not invite additional users or widen Access policy as a test side effect.
+
 ## One-shot integration debugging (before another live deployment)
 
 For Cloudflare Worker HTTP clients, **never store the native Worker-global `fetch` unwrapped in a class property and call it as a method**. It can throw `Illegal invocation` before any request is sent. Keep a synthetic outbound-fetch test in Miniflare/workerd that fails for an unbound receiver but passes for the production wrapper, using mocked GitHub API responses and **no live network**.

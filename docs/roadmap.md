@@ -1,15 +1,17 @@
-# Roadmap: from merged foundation to private pilot
+# Roadmap: from verified App read to secure bot writes
 
-**As of November 19, 2026.** Foundation and private-pilot PRs through [#29](https://github.com/keego/github-agent-identities/pull/29) are merged. [Staging deployment 44378420871](https://github.com/keego/github-agent-identities/actions/runs/44378420871) passed **46 tests** and deployed the Worker and D1 binding; a later [deploy run](https://github.com/keego/github-agent-identities/actions/runs/44454364758) observed HTTP 401 for anonymous `/health`. On November 19 a real authenticated ChatGPT client invoked `identify_chat`, `list_identities` and `get_my_tenant_id`. **This single-user smoke test does not close #16.** No live GitHub App PR read or bot write is verified.
+**As of November 20, 2026.** The authenticated bound Designer ChatGPT conversation successfully retrieved `keego/poster-brain` PR #22 via the selected GitHub App (`ok:true`), after [staging deployment #44798464823](https://github.com/keego/github-agent-identities/actions/runs/44798464823). [#17](https://github.com/keego/github-agent-identities/issues/17) is closed. **#16 live two-human tenant isolation, reconnect/refresh and revocation acceptance remains open**, and **#5 bot-authored writes remain disabled**. Historical pilot setup notes below predate this checkpoint.
 
 ## Live staging checkpoint
+
+**Current state:** Real App-backed read works in staging with bound Designer identity and no write tools. The old November 18–19 bullet points below were historical pre-read observations, not current configuration. The remaining security gate is real multi-human isolation and revocation.
 
 - **Provisioned and verified:** isolated Cloudflare D1 schema, owner-only Access application with Managed OAuth, TypeScript MCP Worker deployed on the staging `workers.dev` hostname, and 46 passing CI tests.
 - **D1 onboarding state:** At the November 18 D1 inspection there were zero App rows and chat bindings; November 19's authenticated `list_identities` still showed no Apps. The binding-row count was not subsequently rechecked.
 - **Security hardening:** Preview URLs are disabled in source. The manual deploy's anonymous `/health` probe observed HTTP 401 in [run 44454364758](https://github.com/keego/github-agent-identities/actions/runs/44454364758); this proves denial for that probe, not complete OAuth acceptance.
 - **Remaining #16 gate:** After the first signed-user tool smoke test, verify two authorized users' isolation, invitation denial, reconnect/refresh, revocation and authenticated chat binding persistence.
-- **Blocked on operator secret:** GitHub App PEM must be installed directly as a Cloudflare Worker secret before read-only #17 verification; no PEM or installation token has been placed in GitHub or chat.
-- **Do not close #16/#17:** the source code and infrastructure exist, but their live acceptance gates remain open.
+- **GitHub App secret (updated):** The protected staging secret is now provisioned and successfully exercised in a real App-backed read; no PEM or installation token has been placed in GitHub or chat.
+- **Gate status:** #17 closed after successful real read. #16 remains open for actual two-human/revocation checks; #5 bot writes remain disabled.
 
 ## Implementation order
 
@@ -17,7 +19,7 @@
 | --- | --- | --- | --- |
 | 1 | [#15 — Worker + D1 integration](https://github.com/keego/github-agent-identities/issues/15) | Wrangler config, migrations, real local D1 tests, staging smoke-testable Worker, safe default lockout | Bind/rebind survives separate requests and a process restart; unauthenticated GitHub writes remain unavailable |
 | 2 | [#16 — Authenticated private MCP](https://github.com/keego/github-agent-identities/issues/16) | ChatGPT-compatible OAuth, real user identity, allowlist, per-tenant authorization of **all** MCP tools | Uninvited and spoofed users denied; different users have disjoint identities/bindings |
-| 3 | [#17 — GitHub App pilot wiring](https://github.com/keego/github-agent-identities/issues/17) | Secure App key secret, tenant-owned identity registry, installation-token exchange, read-only live GitHub call | App `5808833` / installation `183125278` relationship and repo selection verified through GitHub; authorized ChatGPT call reads a PR |
+| 3 — complete | [#17 — GitHub App pilot wiring](https://github.com/keego/github-agent-identities/issues/17) | Secret, registry, installation token and real read-only GitHub PR #22 call | Verified `ok:true` and issue closed; continue with #16 / #5 |
 | 4 | [#5 — First real bot-attributed comment](https://github.com/keego/github-agent-identities/issues/5) | One explicit test PR comment through a bound chat | GitHub author is the expected App `[bot]`, not a personal connector; unauthorized calls create no comment |
 | 5 | [#18 — Self-hosting operator guide](https://github.com/keego/github-agent-identities/issues/18) | Executable setup/upgrade/backup/rotation/revocation instructions for a separate operator-owned instance | A second developer can deploy their own instance without any access to the maintainer's hosted service |
 | Follow-up | [#7 — Picker and rebinding UX](https://github.com/keego/github-agent-identities/issues/7) | Human-friendly identity choices; real dropdown if host supports it; expired session recovery | Verify live ChatGPT selection and persistence; fallback remains accessible |
@@ -33,10 +35,10 @@ Parent deployment epic: [#6 — Private Cloudflare service](https://github.com/k
 | In-memory adapter | `src/core.ts`, `src/local.ts` | Local-only demo; not durable |
 | D1 binding adapter and SQL migrations | `src/d1-store.ts`, `migrations/` | Local D1 tests pass; staging D1 migrated/bound; authenticated chat persistence not yet proven |
 | Tenant-scoped App registry | `src/github-apps.ts`, `src/tenant-router.ts` | Implemented and wired into authenticated Worker; no Apps yet configured for staging tenant |
-| GitHub App token issuer | `src/github-auth.ts` | Mock-tested; real PEM/token exchange pending |
-| GitHub PR API tools | `src/github-operations.ts`, `src/github-mcp.ts` | Mock-tested; real bot operation pending |
+| GitHub App token issuer | `src/github-auth.ts` | PKCS#1 normalization and live installation-token exchange verified by successful PR read |
+| GitHub PR API tools | `src/github-operations.ts`, `src/github-mcp.ts` | Real App-authenticated read of PR #22 succeeded; write operations remain unregistered |
 | Verified tenant context helper | `src/verified-tenant.ts`, `src/access-auth.ts`, `src/worker.ts` | JWT-verifying Worker auth boundary implemented; initial live client calls observed; #16 negative paths still pending |
-| Worker endpoint scaffold | `src/worker.ts` | Staging deployed and Access protected; single-user ChatGPT tools observed; GitHub reads forced off in manual deploy |
+| Worker endpoint scaffold | `src/worker.ts` | Staging deployed and Access protected; read-only App tool enabled by reviewed opt-in; no comment tools registered |
 
 ## Credentials and configuration boundary
 
@@ -45,7 +47,7 @@ The user has supplied these **public** pilot identifiers (not authentication sec
 - Registered App: **Poster Brain - UI/UX Designer**
 - GitHub App ID: `5808833`
 - Installation ID: `183125278`
-- Intended allowed repository: `keego/poster-brain` (**installation access unverified until an authenticated GitHub call**)
+- Allowed repository: `keego/poster-brain` (**confirmed by successful App-authenticated PR #22 read**)
 
 A GitHub installation ID identifies an installation on a user/organization account, not a chat. The private key is a different credential, and **must be generated and installed in the hosting platform's protected secret manager**; never request it in a chat or persist it in Git/D1. See [GitHub App setup](github-app-setup.md).
 

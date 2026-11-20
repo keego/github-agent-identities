@@ -6,7 +6,7 @@
 
 Give separate ChatGPT or Codex conversations recognizable GitHub App identities when they collaborate on issues and pull requests—without standing up a separate plugin or MCP server for each agent.
 
-> **Project status: private staging Worker deployed; first authenticated ChatGPT smoke test observed; full security acceptance pending.** The MCP server, local D1 integration suite, GitHub App client and authenticated Cloudflare Worker are implemented. [Manual staging deployment](https://github.com/keego/github-agent-identities/actions/runs/44378420871) passed **46 tests** with the existing D1 binding. On November 19, an authenticated ChatGPT client invoked `identify_chat`, `list_identities` and `get_my_tenant_id`; the App registry was empty as expected. **#16 cross-user isolation, reconnect/refresh and revocation, plus real GitHub App PR reads and bot writes, remain unverified.** See the [dated handoff](docs/AGENT_HANDOFF.md).
+> **Project status (November 20, 2026): live read-only GitHub App pilot succeeded in private staging.** A bound ChatGPT Designer conversation retrieved `keego/poster-brain` PR #22 through the custom MCP plugin with `ok: true`; [#17](https://github.com/keego/github-agent-identities/issues/17) is closed. [Staging deployment #44798464823](https://github.com/keego/github-agent-identities/actions/runs/44798464823) succeeded. **#16 remains open** for real two-user isolation, reconnect/revocation and negative-path acceptance. Bot-attributed writes [#5](https://github.com/keego/github-agent-identities/issues/5) remain disabled. See the [dated handoff](docs/AGENT_HANDOFF.md).
 
 ## How it will work
 
@@ -51,7 +51,7 @@ References: [OpenAI plugin submission](https://developers.openai.com/plugins/dep
 
 - [x] [#15](https://github.com/keego/github-agent-identities/issues/15) — Real local D1 tests, migrated staging D1 and deployed Worker; the first authenticated ChatGPT identity-tool smoke test was observed, but #16's full acceptance is open.
 - [ ] [#16](https://github.com/keego/github-agent-identities/issues/16) — Authenticated ChatGPT MCP access and isolated, verified tenants.
-- [ ] [#17](https://github.com/keego/github-agent-identities/issues/17) — Securely wire GitHub App `5808833` installation `183125278`; prove a read-only App call.
+- [x] [#17](https://github.com/keego/github-agent-identities/issues/17) — Bound Designer chat read PR #22 using the selected GitHub App (`ok: true`, Nov 20).
 - [ ] [#5](https://github.com/keego/github-agent-identities/issues/5) — Post a real PR comment as the selected GitHub App bot.
 - [ ] [#18](https://github.com/keego/github-agent-identities/issues/18) — Tested self-hosting and operator runbook.
 - [ ] [#7](https://github.com/keego/github-agent-identities/issues/7) — Validate a graphical identity picker and recovery UX.

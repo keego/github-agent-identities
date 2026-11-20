@@ -1,6 +1,6 @@
 # Private MCP authentication with Cloudflare Access
 
-> **Status (November 19, 2026):** The real Worker and Cloudflare Access are deployed to private staging. An authenticated ChatGPT client invoked identity tools; **#16 remains open** for cross-user isolation, reconnect/refresh, revocation and negative-path acceptance. No GitHub write tools are registered.
+> **Status (November 20, 2026):** Private staging has authenticated ChatGPT identity tools **and a successful App-backed, read-only PR #22 result** (issue #17 completed). **#16 remains open** for live two-human tenant isolation, reconnect/refresh, revocation and negative-path acceptance. No GitHub write tools are registered.
 
 This project uses **Cloudflare Access Managed OAuth** for the maintainer's private, invite-only hosted instance. Cloudflare handles OAuth sign-in/consent/refresh and restricts access to approved people. The Worker independently validates the signed assertion injected by Cloudflare Access, checks its application audience/issuer, and enforces a second user allowlist.
 
@@ -14,7 +14,7 @@ This avoids hosting a custom OAuth authorization server or buying a new domain. 
 4. `src/access-auth.ts` independently verifies the JWT's **RS256 signature**, issuing team URL, exact application audience, expiration and user claims. It rejects service-token identities with blank subjects.
 5. The Worker checks the subject's verified email against `ALLOWED_ACCESS_EMAILS` (explicit invitation list). All identity tools are registered only **after** this check; absence/misconfiguration returns HTTP 401/403/503 without tools.
 6. A tenant key derived from Cloudflare Access's **verified user subject** scopes conversation hashing and selects that tenant's registered GitHub Apps from D1. The OAuth **client ID**, `openai/session`, `openai/subject`, arbitrary tool parameters and caller-set headers do not define account identity.
-7. **No GitHub tools are enabled in staging.** A read-only PR tool exists in source behind a disabled operator flag; write tools are unregistered. App reads and bot attribution are still gated separately by #17 and #5.
+7. **Read-only GitHub App PR retrieval is verified in staging** when the explicit `GH_APP_READONLY_ENABLED=true` flag is present. Bot-attributed comments remain unregistered and gated separately by #5.
 
 ## Operator setup checklist (not completed automatically)
 
@@ -51,6 +51,21 @@ The tests generate short-lived synthetic RSA signing keys entirely in memory and
 
 Synthetic tests alone do not prove a real Cloudflare login. A single-user authenticated ChatGPT tool-call smoke test was observed November 19, but cross-user isolation, reconnect/refresh, token revocation and live negative paths still require verification under #16.
 
+## Live two-human security acceptance — #16
+
+**Do not mark #16 complete based only on synthetic tests or the existing single-human ChatGPT session.** Live verification needs two *different* Cloudflare Access user subjects who each sign in through their own ChatGPT OAuth session. The second user must be explicitly invited in the operator's Cloudflare Access policy and in the Worker's `ALLOWED_ACCESS_EMAILS` allowlist; do not use a shared account, a forged JWT or a ChatGPT metadata override.
+
+The second user can have **zero configured App identities**: this is enough to verify that they cannot see the first user's private App list or binding. If a second independently authorized App is provisioned later, repeat the test with disjoint lists. Do not copy the first user's D1 tenant ID into the second user's record.
+
+1. **A (operator):** In the already-working Designer conversation, confirm `list_identities` contains UI/UX Designer and `get_current_identity` retains the Designer binding. Retrieve PR #22 read-only as a positive control.
+2. **B (invited tester):** Sign in separately through the same staging custom MCP plugin. Call `list_identities`: it must not reveal A's Designer identity (an empty list is expected until B has authorized Apps). With the same *reported* conversation metadata if naturally possible, `get_current_identity` must be unbound; trying to bind `poster-brain--ui-ux-designer` must fail. Never ask either user to reveal JWTs or personal tenant IDs in public reports.
+3. **Reconnect:** Sign out/reconnect A through Cloudflare Access Managed OAuth, then confirm A's Designer binding and App read persist in that conversation. An OAuth refresh and ordinary client reconnect are distinct behaviors; record which was actually tested.
+4. **Denied user:** A non-invited Access identity should be denied at the edge or receive a sanitized 403 from the Worker, with no MCP tools exposed. Do not temporarily expose private Apps to a stranger solely for testing.
+5. **Revocation:** Remove B from **both** Access policy and Worker allowlist in the operator-controlled staging config. Confirm B cannot reconnect or use tools. Worker allowlist revocation is checked on each request, including previously signed JWTs. Cloudflare-issued JWT lifetime and edge session revocation need separate checking—do not infer instantaneous Cloudflare session invalidation from a 403 Worker response. Re-invite only if appropriate.
+6. **Record evidence:** Actor labels A/B, date, tool names, sanitized error codes/HTTP statuses, and whether a read-only positive control succeeded. Keep signed assertions, OAuth tokens, private identifiers, emails and GitHub App keys out of the issue.
+
+The synthetic test suite covers same-metadata disjoint tenants, a reconnect with fresh signed assertion, a different Access subject reusing the same email, expired/wrong-audience assertions, effective allowlist revocation and cross-tenant repository denial **without real credentials**. This is regression coverage, not the live two-user acceptance result.
+
 ## Authentication failure handling
 
 | Status | Meaning | Typical response |
@@ -68,7 +83,7 @@ Access normally intercepts unauthenticated HTTP requests itself and sends the OA
 - Public `workers.dev` network availability is **not** public authorization. Access must protect every route, preview and associated domain; the Worker's JWT verification is an additional guard.
 - On revoking a user's access, remove them from the Access policy **and** the Worker allowlist. Previously issued JWTs may remain valid until expiration; use short access-token lifetimes (Cloudflare recommends 5–15 minutes for agents).
 - Do not allow service tokens to act as human tenants; this phase requires nonempty signed human subject + email.
-- No GitHub App private key is involved in this PR. When added in #17, it belongs **only** in protected Cloudflare secrets.
+- The #17 GitHub App private key is provisioned only in the protected Cloudflare Worker secret binding. Never expose it in tests, MCP outputs, logs, D1 or issues.
 - Cloudflare Access's identity principal is distinct from the GitHub App bot identity. Cloudflare establishes *which person can use the router*; the binding determines *which GitHub App acts on their behalf*.
 
 ## Deferred setup and dependencies
