@@ -32,7 +32,7 @@ Through the operator-controlled Cloudflare D1 dashboard or authenticated CLI on 
 INSERT INTO github_app_identities
   (tenant_id, identity_id, display_name, app_id, installation_id, secret_ref, allowed_repos_json)
 VALUES
-  ('cloudflare-access:REPLACE_WITH_SIGNED_OWNER_SUB',
+  ('REPLACE_WITH_EXACT_VERIFIED_TENANT_ID',
    'ghai-sandbox',
    'GHAI Sandbox Bot',
    REPLACE_WITH_APP_ID,
@@ -41,7 +41,7 @@ VALUES
    '["keego/github-agent-identities"]');
 ```
 
-The signed user ID, numeric App and installation IDs must be verified before applying SQL. Do **not** alter or overwrite the existing `design` App row. The database stores a *secret binding name*, not a PEM or installation token. Missing IDs or unknown secret: **stop**, do not invent placeholders or attempt a write.
+Replace the **entire** quoted tenant-ID placeholder with the exact `get_my_tenant_id` result (which normally already includes the `cloudflare-access:` prefix); do not prepend that prefix twice. The signed user ID, numeric App and installation IDs must be verified before applying SQL. Do **not** alter or overwrite the existing `design` App row. The database stores a *secret binding name*, not a PEM or installation token. Missing IDs or unknown secret: **stop**, do not invent placeholders or attempt a write.
 
 ## D. Safe acceptance sequence
 
