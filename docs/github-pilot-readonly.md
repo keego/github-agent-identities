@@ -77,7 +77,13 @@ If the authenticated, bound `github_get_pull_request` tool returns an error, rec
 | `APP_JWT_SIGNING_FAILED` | The key was parsed and normalized, but local App JWT signing still failed | Investigate Worker crypto compatibility, not installation permissions |
 | `APP_INSTALLATION_TOKEN_FAILED` | Local signing passed, but GitHub installation-token exchange did not complete | Verify App ID, installation ID, installation status, and GitHub access; do not assume repo permissions without checking |
 | `APP_TOKEN_INVALID` | Token exchange returned an unusable or expiring token | Recheck installation exchange and token lifetime |
-| `GITHUB_REQUEST_FAILED` | Installation token was acquired but subsequent GitHub API PR request failed | Check installation's repository selection and Pull requests permission; GitHub HTTP response bodies stay private |
+| `GITHUB_RESOURCE_NOT_FOUND_OR_INACCESSIBLE` | GitHub returned HTTP 404; PR may be absent **or hidden** from this installation | Check that the App installation includes the repository; verify that the PR exists separately; confirm Pull requests: Read permission |
+| `GITHUB_REQUEST_FORBIDDEN` | GitHub returned HTTP 403 without primary rate-limit exhaustion | Check effective App installation permission, installation approval, and account restrictions |
+| `GITHUB_REQUEST_UNAUTHORIZED` | GitHub returned HTTP 401 after token issuance | Recheck GitHub App installation authorization; do not share tokens |
+| `GITHUB_RATE_LIMITED` | GitHub returned HTTP 429 or HTTP 403 with remaining primary quota zero | Observe GitHub retry/rate limits; do not rotate credentials |
+| `GITHUB_BAD_REQUEST` | GitHub returned HTTP 400 or 422 | Inspect endpoint and supported API request parameters, without exposing request headers |
+| `GITHUB_SERVICE_UNAVAILABLE` | GitHub returned HTTP 5xx | Check GitHub API health and retry after service recovery |
+| `GITHUB_REQUEST_FAILED` | Unexpected HTTP status, fetch transport error, or invalid JSON response | Inspect runtime networking separately; no raw upstream details returned |
 | `INTERNAL_ERROR` | Unexpected failure outside classified App-token stages | Investigate the server-side path without dumping sensitive exception contents |
 
 A connector may wrap a tool's `isError` response in a generic runtime error such as `INVALID_ARGUMENT`; inspect the JSON **inside** the MCP tool response for the actual fixed code. Successful tool discovery and binding alone never prove GitHub App authentication.

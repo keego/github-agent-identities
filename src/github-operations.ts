@@ -26,7 +26,10 @@ export class GithubOperationError extends Error {
   constructor(public readonly code:
     "NOT_AUTHENTICATED" | "IDENTITY_NOT_BOUND" | "APP_NOT_CONFIGURED" |
     "REPOSITORY_NOT_ALLOWED" | "INVALID_ARGUMENT" | "GITHUB_REQUEST_FAILED" |
-    "APP_REGISTRY_FAILED" | AppTokenErrorCode) {
+    "APP_REGISTRY_FAILED" | AppTokenErrorCode |
+    "GITHUB_REQUEST_UNAUTHORIZED" | "GITHUB_REQUEST_FORBIDDEN" |
+    "GITHUB_RESOURCE_NOT_FOUND_OR_INACCESSIBLE" | "GITHUB_RATE_LIMITED" |
+    "GITHUB_BAD_REQUEST" | "GITHUB_SERVICE_UNAVAILABLE") {
     super(code);
   }
 }
@@ -92,7 +95,18 @@ export class GitHubOperations {
       throw new GithubOperationError("GITHUB_REQUEST_FAILED");
     }
     if (!response.ok) {
-      // Never surface untrusted GitHub error bodies or credential-bearing headers.
+      // Classify fixed HTTP statuses only. Never surface GitHub's response
+      // body, request URL, auth header or installation token.
+      // GitHub intentionally uses 404 for resources hidden by permissions, too.
+      if (response.status === 401) throw new GithubOperationError("GITHUB_REQUEST_UNAUTHORIZED");
+      if (response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0") {
+        throw new GithubOperationError("GITHUB_RATE_LIMITED");
+      }
+      if (response.status === 403) throw new GithubOperationError("GITHUB_REQUEST_FORBIDDEN");
+      if (response.status === 404) throw new GithubOperationError("GITHUB_RESOURCE_NOT_FOUND_OR_INACCESSIBLE");
+      if (response.status === 429) throw new GithubOperationError("GITHUB_RATE_LIMITED");
+      if (response.status === 400 || response.status === 422) throw new GithubOperationError("GITHUB_BAD_REQUEST");
+      if (response.status >= 500) throw new GithubOperationError("GITHUB_SERVICE_UNAVAILABLE");
       throw new GithubOperationError("GITHUB_REQUEST_FAILED");
     }
     try {

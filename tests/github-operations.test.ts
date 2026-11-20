@@ -77,7 +77,8 @@ test("GitHub 403 responses are sanitized", async () => {
   const failure = new GitHubOperations(router, registry, { forApp: async () => "fake" },
     (async () => new Response("sensitive remote response", { status: 403 })) as typeof fetch);
   await assert.rejects(failure.getPullRequest(caller(), "keego/poster-brain", 3), (e: unknown) =>
-    e instanceof GithubOperationError && e.code === "GITHUB_REQUEST_FAILED");
+    e instanceof GithubOperationError && e.code === "GITHUB_REQUEST_FORBIDDEN" &&
+      !String(e).includes("sensitive remote response"));
 });
 
 test("invalid numbers and comment bodies fail before network calls", async () => {
@@ -114,4 +115,45 @@ test("registry failures return safe stage classification instead of raw SQL fail
     failed.getPullRequest(caller(), "keego/poster-brain", 3),
     (error: unknown) => error instanceof GithubOperationError && error.code === "APP_REGISTRY_FAILED",
   );
+});
+
+
+test("GitHub PR HTTP failures are classified without exposing upstream details", async () => {
+  const { router, registry } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  const cases: ReadonlyArray<{
+    status: number; headers?: Record<string, string>; expected: string;
+  }> = [
+    { status: 400, expected: "GITHUB_BAD_REQUEST" },
+    { status: 401, expected: "GITHUB_REQUEST_UNAUTHORIZED" },
+    { status: 403, expected: "GITHUB_REQUEST_FORBIDDEN" },
+    { status: 403, headers: { "x-ratelimit-remaining": "0" }, expected: "GITHUB_RATE_LIMITED" },
+    { status: 404, expected: "GITHUB_RESOURCE_NOT_FOUND_OR_INACCESSIBLE" },
+    { status: 422, expected: "GITHUB_BAD_REQUEST" },
+    { status: 429, expected: "GITHUB_RATE_LIMITED" },
+    { status: 502, expected: "GITHUB_SERVICE_UNAVAILABLE" },
+    { status: 418, expected: "GITHUB_REQUEST_FAILED" },
+  ];
+  for (const { status, headers, expected } of cases) {
+    const failure = new GitHubOperations(router, registry, { forApp: async () => "sensitive-token" },
+      (async () => new Response("secret, remote response or token", { status, headers })) as typeof fetch);
+    await assert.rejects(failure.getPullRequest(caller(), "keego/poster-brain", 22), (error: unknown) => {
+      assert.equal(error instanceof GithubOperationError, true);
+      assert.equal((error as GithubOperationError).code, expected);
+      assert.equal((error as Error).message, expected);
+      assert.equal(String(error).includes("secret"), false);
+      assert.equal(String(error).includes("sensitive-token"), false);
+      return true;
+    });
+  }
+});
+
+test("GitHub PR fetch transport failures still use safe generic errors", async () => {
+  const { router, registry } = fixture();
+  await router.bind(caller().metadata, "design", "tenant-A");
+  const failure = new GitHubOperations(router, registry, { forApp: async () => "sensitive-token" },
+    (async () => { throw new Error("private connection details"); }) as typeof fetch);
+  await assert.rejects(failure.getPullRequest(caller(), "keego/poster-brain", 22), (error: unknown) =>
+    error instanceof GithubOperationError && error.code === "GITHUB_REQUEST_FAILED" &&
+    !error.message.includes("private connection details"));
 });
