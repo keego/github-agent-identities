@@ -11,6 +11,16 @@ const pilotBindingNames = [
   'GH_APP_COMMENT_PILOT_REPOSITORY', 'GH_APP_COMMENT_PILOT_NUMBER',
 ];
 const expectedBindings = [...legacyBindings, ...pilotBindingNames].sort();
+// The operator may add this second private-key binding before or after the
+// staging code is deployed. Allow it by *name and secret type* only.
+// Preserve the exact allowlist; do not accept arbitrary additional bindings.
+const sandboxSecretName = 'GH_APP_SANDBOX_PRIVATE_KEY';
+const allowedBindingSets = [
+  legacyBindings,
+  [...legacyBindings, sandboxSecretName].sort(),
+  expectedBindings,
+  [...expectedBindings, sandboxSecretName].sort(),
+];
 function pilotEnabled(env) {
   return env.GH_APP_COMMENT_PILOT_ENABLED === 'true';
 }
@@ -41,10 +51,18 @@ export function verifyStagingSettings(response, env, phase) {
   const settings = response.result;
   requireMatch(settings && Array.isArray(settings.bindings), 'Worker bindings are missing');
   const names = settings.bindings.map(b => b.name).sort();
-  const isCurrent = JSON.stringify(names) === JSON.stringify(expectedBindings);
-  const isLegacy = JSON.stringify(names) === JSON.stringify(legacyBindings);
-  requireMatch(isCurrent || (phase === 'before' && isLegacy), 'Unexpected staging binding names');
+  const isCurrent = pilotBindingNames.every(name => names.includes(name));
+  const valid = allowedBindingSets.some(expected =>
+    (phase === 'before' || expected.includes('GH_APP_COMMENT_PILOT_ENABLED')) &&
+    JSON.stringify(names) === JSON.stringify(expected));
+  requireMatch(valid, 'Unexpected staging binding names');
   const bindings = new Map(settings.bindings.map(b => [b.name, b]));
+  // The two App keys are independent. Never inspect, compare or log their
+  // values. Existing Designer read access must not depend on Sandbox setup.
+  if (bindings.has(sandboxSecretName)) {
+    requireMatch(bindings.get(sandboxSecretName).type === 'secret_text',
+      'Sandbox App private-key secret binding has wrong type');
+  }
   validateStagingWritePilotEnv(env);
 
   for (const name of ['ACCESS_ISSUER', 'ACCESS_AUDIENCE', 'ALLOWED_ACCESS_EMAILS', 'MCP_PUBLIC_HOSTNAME']) {
