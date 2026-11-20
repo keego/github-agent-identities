@@ -75,14 +75,16 @@ async function setup() {
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const jwk = { ...(await exportJWK(publicKey)), kid: "signing-test", alg: "RS256", use: "sig" };
   const resolver: JWTVerifyGetKey = createLocalJWKSet({ keys: [jwk] });
-  async function token(userId: string, email: string) {
+  async function token(userId: string, email: string, options: {
+    expiresIn?: string; audience?: string;
+  } = {}) {
     return new SignJWT({ type: "app", email })
       .setProtectedHeader({ alg: "RS256", kid: "signing-test" })
       .setSubject(userId)
       .setIssuer(issuer)
-      .setAudience(audience)
+      .setAudience(options.audience ?? audience)
       .setIssuedAt()
-      .setExpirationTime("15m")
+      .setExpirationTime(options.expiresIn ?? "15m")
       .sign(privateKey);
   }
   const env: WorkerEnv = {
@@ -266,4 +268,153 @@ test("GitHub-read opt-in never permits unauthenticated access", async () => {
     }), env, resolver,
   );
   assert.equal(response.status, 401);
+});
+
+
+test("fresh Access assertion after reconnect preserves binding for the same signed human", async () => {
+  const { token, clientFor } = await setup();
+  const meta = { "openai/subject": "shared-chat-subject", "openai/session": "reconnected-chat" };
+  const initial = clientFor(await token("alice-id", "alice@example.com"));
+  try {
+    await initial.client.connect(initial.transport);
+    const bind = parse(await initial.client.callTool({
+      name: "bind_identity", arguments: { identityId: "design" }, _meta: meta,
+    }));
+    assert.equal(bind.identity?.id, "design");
+  } finally {
+    await initial.client.close();
+  }
+
+  // A new signed Access assertion and brand-new MCP client must select
+  // the same tenant-scoped binding, not an OAuth client/session ID.
+  const renewed = clientFor(await token("alice-id", "alice@example.com"));
+  const differentSubject = clientFor(await token("distinct-access-subject", "alice@example.com"));
+  try {
+    await renewed.client.connect(renewed.transport);
+    const state = parse(await renewed.client.callTool({
+      name: "get_current_identity", arguments: {}, _meta: meta,
+    }));
+    assert.equal(state.registered, true);
+    assert.equal(state.identity?.id, "design");
+
+    // Even the same allowlisted email and identical MCP metadata must NOT
+    // inherit a different verified Access subject's binding or App list.
+    await differentSubject.client.connect(differentSubject.transport);
+    const foreign = parse(await differentSubject.client.callTool({
+      name: "get_current_identity", arguments: {}, _meta: meta,
+    }));
+    assert.equal(foreign.registered, false);
+    const apps = parse(await differentSubject.client.callTool({
+      name: "list_identities", arguments: {},
+    }));
+    assert.deepEqual(apps.identities, []);
+  } finally {
+    await renewed.client.close();
+    await differentSubject.client.close();
+  }
+});
+
+test("Worker rejects an already-signed user's token after allowlist revocation", async () => {
+  const { token, env, resolver, clientFor } = await setup();
+  const aliceJwt = await token("alice-id", "alice@example.com");
+
+  // Establish that the exact assertion was authorized before the revocation.
+  const active = clientFor(aliceJwt);
+  try {
+    await active.client.connect(active.transport);
+    const before = parse(await active.client.callTool({ name: "list_identities", arguments: {} }));
+    assert.deepEqual(before.identities?.map(identity => identity.id), ["design"]);
+
+    // The actual authenticated HTTP boundary re-evaluates the Worker allowlist
+    // on every MCP request; a still cryptographically valid JWT is insufficient.
+    env.ALLOWED_ACCESS_EMAILS = "bob@example.com";
+    const denied = await handlePrivateWorker(
+      new Request("https://private.example.workers.dev/mcp", {
+        method: "POST",
+        headers: {
+          Host: "private.example.workers.dev",
+          "Cf-Access-Jwt-Assertion": aliceJwt,
+        },
+      }), env, resolver,
+    );
+    assert.equal(denied.status, 403);
+    assert.deepEqual(await denied.json(), { ok: false, error: "NOT_ALLOWED" });
+
+    // A separate connection using the already-issued JWT must also fail.
+    const replay = clientFor(aliceJwt);
+    try {
+      await assert.rejects(replay.client.connect(replay.transport));
+    } finally {
+      await replay.client.close();
+    }
+  } finally {
+    await active.client.close();
+  }
+});
+
+test("expired and wrong-audience signed assertions cannot reach any MCP tool", async () => {
+  const { token, env, resolver } = await setup();
+  for (const jwt of [
+    await token("alice-id", "alice@example.com", { expiresIn: "-10m" }),
+    await token("alice-id", "alice@example.com", { audience: "different-access-app-audience" }),
+  ]) {
+    const response = await handlePrivateWorker(
+      new Request("https://private.example.workers.dev/mcp", {
+        method: "POST",
+        headers: {
+          Host: "private.example.workers.dev",
+          "Cf-Access-Jwt-Assertion": jwt,
+        },
+      }), env, resolver,
+    );
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { ok: false, error: "UNAUTHENTICATED" });
+  }
+});
+
+test("two bound tenants cannot read each other's GitHub App repositories", async () => {
+  const { token, clientFor, env } = await setup();
+  env.GH_APP_READONLY_ENABLED = "true";
+  // No real PEM secrets: successful repo authorization stops at the
+  // deterministic missing-secret check rather than making GitHub HTTP calls.
+  const alice = clientFor(await token("alice-id", "alice@example.com"));
+  const bob = clientFor(await token("bob-id", "bob@example.com"));
+  const meta = {
+    "openai/subject": "same-shared-subject",
+    "openai/session": "same-shared-session",
+    tenantId: "cloudflare-access:alice-id",
+    clientId: "spoofed-client",
+  };
+  const read = async (client: Client, repository: string) => {
+    const result = await client.callTool({
+      name: "github_get_pull_request",
+      arguments: { repository, number: 22 },
+      _meta: meta,
+    });
+    assert.equal(result.isError, true);
+    const output = result.content?.[0]?.type === "text" ? result.content[0].text : "{}";
+    return JSON.parse(output) as { ok: false; error: string };
+  };
+  try {
+    await alice.client.connect(alice.transport);
+    await bob.client.connect(bob.transport);
+
+    const aBind = await alice.client.callTool({
+      name: "bind_identity", arguments: { identityId: "design" }, _meta: meta,
+    });
+    const bBind = await bob.client.callTool({
+      name: "bind_identity", arguments: { identityId: "qa" }, _meta: meta,
+    });
+    assert.notEqual(aBind.isError, true);
+    assert.notEqual(bBind.isError, true);
+
+    assert.equal((await read(alice.client, "keego/poster-brain")).error, "APP_SECRET_UNAVAILABLE");
+    assert.equal((await read(bob.client, "example/qa-project")).error, "APP_SECRET_UNAVAILABLE");
+    assert.equal((await read(alice.client, "example/qa-project")).error, "REPOSITORY_NOT_ALLOWED");
+    assert.equal((await read(bob.client, "keego/poster-brain")).error, "REPOSITORY_NOT_ALLOWED");
+    assert.equal((await read(alice.client, "keego/other")).error, "REPOSITORY_NOT_ALLOWED");
+  } finally {
+    await alice.client.close();
+    await bob.client.close();
+  }
 });
