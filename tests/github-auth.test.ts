@@ -47,11 +47,11 @@ test("GitHub PKCS#1 key converts into WebCrypto-importable PKCS#8 without changi
   const converted = prepareAppPrivateKey(original);
   assert.equal(converted.startsWith("-----BEGIN PRIVATE KEY-----"), true);
   assert.equal(converted.includes("RSA PRIVATE KEY"), false);
-  const encoded = converted.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\s/g, "");
-  const signingKey = await webcrypto.subtle.importKey("pkcs8", Buffer.from(encoded, "base64"),
+  const encoded = converted.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, "");
+  const signingKey = await webcrypto.subtle.importKey("pkcs8", Uint8Array.from(Buffer.from(encoded, "base64")),
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
   const data = Buffer.from("synthetic-github-app-test");
-  const signature = Buffer.from(await webcrypto.subtle.sign("RSASSA-PKCS1-v1_5", signingKey, data));
+  const signature = Buffer.from(await webcrypto.subtle.sign("RSASSA-PKCS1-v1_5", signingKey, Uint8Array.from(data)));
   const verificationKey = publicKey.export({ type: "spki", format: "pem" }).toString();
   const { verify } = await import("node:crypto");
   assert.equal(verify("sha256", data, verificationKey, signature), true);
@@ -62,8 +62,8 @@ test("PKCS#8 and escaped-newline PKCS#1 keys normalize; malformed or non-RSA key
   const pkcs1 = privateKey.export({ type: "pkcs1", format: "pem" }).toString();
   const pkcs8 = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
   assert.equal(prepareAppPrivateKey(pkcs8).startsWith("-----BEGIN PRIVATE KEY-----"), true);
-  assert.equal(prepareAppPrivateKey(pkcs1.trim().replace(/\\n/g, "\\\\n")).startsWith("-----BEGIN PRIVATE KEY-----"), true);
-  assert.equal(prepareAppPrivateKey(pkcs1.replace(/\\n/g, "\\r\\n")).startsWith("-----BEGIN PRIVATE KEY-----"), true);
+  assert.equal(prepareAppPrivateKey(pkcs1.trim().replace(/\n/g, "\\n")).startsWith("-----BEGIN PRIVATE KEY-----"), true);
+  assert.equal(prepareAppPrivateKey(pkcs1.replace(/\n/g, "\r\n")).startsWith("-----BEGIN PRIVATE KEY-----"), true);
   await expectCode(Promise.resolve().then(() => prepareAppPrivateKey("not-a-private-key")), "APP_KEY_FORMAT_INVALID");
   const ec = generateKeyPairSync("ec", { namedCurve: "prime256v1" }).privateKey.export({ type: "pkcs8", format: "pem" }).toString();
   await expectCode(Promise.resolve().then(() => prepareAppPrivateKey(ec)), "APP_KEY_FORMAT_INVALID");
