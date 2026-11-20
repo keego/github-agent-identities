@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, webcrypto } from "node:crypto";
 import { createAppAuth } from "@octokit/auth-app";
-import { AppTokenError, InstallationTokenProvider, octokitTokenIssuer } from "../src/github-auth.ts";
+import { AppTokenError, InstallationTokenProvider, octokitTokenIssuer, prepareAppPrivateKey } from "../src/github-auth.ts";
 import type { AppIdentity } from "../src/github-apps.ts";
 
 const identity: AppIdentity = {
@@ -29,7 +29,7 @@ test("invalid App private key is classified at local JWT-signing stage, never re
   await expectCode(octokitTokenIssuer({
     appId: identity.appId, installationId: identity.installationId,
     privateKey: "not-a-private-key",
-  }), "APP_JWT_SIGNING_FAILED");
+  }), "APP_KEY_FORMAT_INVALID");
 });
 
 test("Octokit signs a synthetic PKCS#1 GitHub-style key without contacting GitHub", async () => {
@@ -39,6 +39,34 @@ test("Octokit signs a synthetic PKCS#1 GitHub-style key without contacting GitHu
   const result = await auth({ type: "app" });
   assert.equal(result.token.split(".").length, 3); // Only check shape; never print JWT in failures.
   assert.equal(result.appId, identity.appId);
+});
+
+test("GitHub PKCS#1 key converts into WebCrypto-importable PKCS#8 without changing its signing identity", async () => {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const original = privateKey.export({ type: "pkcs1", format: "pem" }).toString();
+  const converted = prepareAppPrivateKey(original);
+  assert.equal(converted.startsWith("-----BEGIN PRIVATE KEY-----"), true);
+  assert.equal(converted.includes("RSA PRIVATE KEY"), false);
+  const encoded = converted.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, "");
+  const signingKey = await webcrypto.subtle.importKey("pkcs8", Uint8Array.from(Buffer.from(encoded, "base64")),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const data = Buffer.from("synthetic-github-app-test");
+  const signature = Buffer.from(await webcrypto.subtle.sign("RSASSA-PKCS1-v1_5", signingKey, Uint8Array.from(data)));
+  const verificationKey = publicKey.export({ type: "spki", format: "pem" }).toString();
+  const { verify } = await import("node:crypto");
+  assert.equal(verify("sha256", data, verificationKey, signature), true);
+});
+
+test("PKCS#8 and escaped-newline PKCS#1 keys normalize; malformed or non-RSA keys fail closed", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const pkcs1 = privateKey.export({ type: "pkcs1", format: "pem" }).toString();
+  const pkcs8 = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+  assert.equal(prepareAppPrivateKey(pkcs8).startsWith("-----BEGIN PRIVATE KEY-----"), true);
+  assert.equal(prepareAppPrivateKey(pkcs1.trim().replace(/\n/g, "\\n")).startsWith("-----BEGIN PRIVATE KEY-----"), true);
+  assert.equal(prepareAppPrivateKey(pkcs1.replace(/\n/g, "\r\n")).startsWith("-----BEGIN PRIVATE KEY-----"), true);
+  await expectCode(Promise.resolve().then(() => prepareAppPrivateKey("not-a-private-key")), "APP_KEY_FORMAT_INVALID");
+  const ec = generateKeyPairSync("ec", { namedCurve: "prime256v1" }).privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+  await expectCode(Promise.resolve().then(() => prepareAppPrivateKey(ec)), "APP_KEY_FORMAT_INVALID");
 });
 
 test("installation issuance failure is sanitized, while typed stages are preserved", async () => {
