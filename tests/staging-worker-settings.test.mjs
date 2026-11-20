@@ -148,3 +148,15 @@ test('post-deploy binding inspection still requires Designer key when Sandbox is
   x.result.bindings.splice(x.result.bindings.findIndex(b => b.name === 'GH_APP_DESIGN_PRIVATE_KEY'), 1);
   assert.throws(() => verifyStagingSettings(x, env, 'after'));
 });
+
+test('staging cf deploy requires both pre-existing protected App secrets by name only', () => {
+  const source = readFileSync(new URL('../cloudflare.config.ts', import.meta.url), 'utf8');
+  const workflow = readFileSync(new URL('../.github/workflows/deploy-staging.yml', import.meta.url), 'utf8');
+  assert.match(source, /GH_APP_DESIGN_PRIVATE_KEY: bindings\.secret\(\)/);
+  assert.match(source, /GH_APP_SANDBOX_PRIVATE_KEY: bindings\.secret\(\)/);
+  assert.match(source, /\.\.\.\(staging \? \{/);
+  assert.equal(source.includes('GH_APP_DESIGN_PRIVATE_KEY: bindings.text'), false);
+  assert.equal(source.includes('GH_APP_SANDBOX_PRIVATE_KEY: bindings.text'), false);
+  assert.match(workflow, /all\(\["GH_APP_DESIGN_PRIVATE_KEY", "GH_APP_SANDBOX_PRIVATE_KEY"\]/);
+  assert.match(workflow, /secret_text/);
+});

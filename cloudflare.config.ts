@@ -41,6 +41,14 @@ export default defineConfig(({ mode }) => {
         GH_APP_COMMENT_PILOT_OWNER_TENANT_ID: bindings.text(process.env.GH_APP_COMMENT_PILOT_OWNER_TENANT_ID || ""),
         GH_APP_COMMENT_PILOT_REPOSITORY: bindings.text(process.env.GH_APP_COMMENT_PILOT_REPOSITORY || ""),
         GH_APP_COMMENT_PILOT_NUMBER: bindings.text(process.env.GH_APP_COMMENT_PILOT_NUMBER || ""),
+        // Declare names ONLY. Private values are provisioned directly as
+        // protected staging Worker secrets, never stored in git/Actions.
+        // A missing required secret must fail deploy rather than silently
+        // omit authentication for an existing GitHub App.
+        ...(staging ? {
+          GH_APP_DESIGN_PRIVATE_KEY: bindings.secret(),
+          GH_APP_SANDBOX_PRIVATE_KEY: bindings.secret(),
+        } : {}),
       },
     },
   };
