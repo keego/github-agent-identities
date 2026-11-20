@@ -5,6 +5,8 @@ import path from "node:path";
 import os from "node:os";
 import { Miniflare } from "miniflare";
 import { D1BindingStore } from "../src/d1-store.ts";
+import { D1AppRegistry } from "../src/github-apps.ts";
+import { createTenantRouter } from "../src/tenant-router.ts";
 import { D1PilotCommentClaims } from "../src/comment-pilot.ts";
 import { IdentityRouter, exampleIdentities } from "../src/core.ts";
 import worker from "../src/worker.ts";
@@ -155,6 +157,65 @@ test("pilot claims fail closed before the new migration", async () => {
   try {
     const claims = new D1PilotCommentClaims(await mf.getD1Database("DB"));
     await assert.rejects(claims.claim("tenant-A", "keego/poster-brain", 22, "design"));
+  } finally {
+    await mf.dispose();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("real D1 supports two independent GitHub Apps for one owner without leaking into another tenant", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "github-agent-identities-multi-app-"));
+  let mf = runtime(dir);
+  try {
+    const db = await applyMigrations(mf);
+    const apps = [
+      { identityId: "design", display: "UI/UX Designer", appId: 5808833,
+        installationId: 183125278, secretRef: "GH_APP_DESIGN_PRIVATE_KEY",
+        repos: ["keego/poster-brain"] },
+      { identityId: "ghai-sandbox", display: "GHAI Sandbox Bot", appId: 67890,
+        installationId: 98765, secretRef: "GH_APP_SANDBOX_PRIVATE_KEY",
+        repos: ["keego/github-agent-identities"] },
+    ];
+    for (const app of apps) {
+      await db.prepare(
+        "INSERT INTO github_app_identities " +
+        "(tenant_id, identity_id, display_name, app_id, installation_id, secret_ref, allowed_repos_json) " +
+        "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+      ).bind("cloudflare-access:synthetic-owner", app.identityId, app.display,
+        app.appId, app.installationId, app.secretRef, JSON.stringify(app.repos)).run();
+    }
+    const registry = new D1AppRegistry(db);
+    const owner = "cloudflare-access:synthetic-owner";
+    const stranger = "cloudflare-access:synthetic-other";
+    const installed = await registry.listForTenant(owner);
+    assert.equal(installed.length, 2);
+    assert.deepEqual(installed.map(x => x.identityId), ["ghai-sandbox", "design"]);
+    assert.deepEqual(installed.find(x => x.identityId === "design")?.allowedRepositories,
+      ["keego/poster-brain"]);
+    assert.deepEqual(installed.find(x => x.identityId === "ghai-sandbox")?.allowedRepositories,
+      ["keego/github-agent-identities"]);
+    assert.deepEqual(await registry.listForTenant(stranger), []);
+    assert.equal(await registry.getForTenant(stranger, "ghai-sandbox"), null);
+
+    const router = await createTenantRouter(new D1BindingStore(db), registry, owner);
+    const original = session("owner", "designer-chat");
+    const sandbox = session("owner", "sandbox-chat");
+    await router.bind(original, "design", owner);
+    await router.bind(sandbox, "ghai-sandbox", owner);
+    assert.equal((await router.identify(original, owner)).identity?.id, "design");
+    assert.equal((await router.identify(sandbox, owner)).identity?.id, "ghai-sandbox");
+
+    const foreign = await createTenantRouter(new D1BindingStore(db), registry, stranger);
+    assert.deepEqual(foreign.list(), []);
+    assert.equal((await foreign.identify(sandbox, stranger)).registered, false);
+
+    await mf.dispose();
+    mf = runtime(dir);
+    const afterRestart = await mf.getD1Database("DB");
+    const newRegistry = new D1AppRegistry(afterRestart);
+    const refreshed = await createTenantRouter(new D1BindingStore(afterRestart), newRegistry, owner);
+    assert.equal((await refreshed.identify(original, owner)).identity?.id, "design");
+    assert.equal((await refreshed.identify(sandbox, owner)).identity?.id, "ghai-sandbox");
   } finally {
     await mf.dispose();
     await rm(dir, { recursive: true, force: true });

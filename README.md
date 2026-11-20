@@ -52,12 +52,12 @@ References: [OpenAI plugin submission](https://developers.openai.com/plugins/dep
 - [x] [#15](https://github.com/keego/github-agent-identities/issues/15) — Real local D1 tests, migrated staging D1 and deployed Worker; the first authenticated ChatGPT identity-tool smoke test was observed, but #16's full acceptance is open.
 - [ ] [#16](https://github.com/keego/github-agent-identities/issues/16) — Authenticated ChatGPT MCP access and isolated, verified tenants.
 - [x] [#17](https://github.com/keego/github-agent-identities/issues/17) — Bound Designer chat read PR #22 using the selected GitHub App (`ok: true`, Nov 20).
-- [ ] [#5](https://github.com/keego/github-agent-identities/issues/5) — A default-off, one-owner/one-test-PR bot-comment pilot is under review; no live comment or general write permission yet. See [operator safety checklist](docs/github-comment-pilot.md).
+- [ ] [#5](https://github.com/keego/github-agent-identities/issues/5) — Default-off, owner-only first bot-comment pilot implemented in merged PR #40; live bot attribution unverified. Our proposed target is a separate [Sandbox Bot](docs/github-sandbox-app.md) installed only on this repository. See [operator safety checklist](docs/github-comment-pilot.md).
 - [ ] [#18](https://github.com/keego/github-agent-identities/issues/18) — Tested self-hosting and operator runbook.
 - [ ] [#7](https://github.com/keego/github-agent-identities/issues/7) — Validate a graphical identity picker and recovery UX.
 - [ ] [#1](https://github.com/keego/github-agent-identities/issues/1) — Public Plugin Directory strategy and optional dedicated domain.
 
-See [the staging handoff](docs/live-staging-deployment.md), [the implementation plan](docs/roadmap.md), [private Access authentication](docs/cloudflare-access.md), and the [read-only GitHub App pilot](docs/github-pilot-readonly.md) for dependencies, release gates, and operator setup.
+See [the staging handoff](docs/live-staging-deployment.md), [the implementation plan](docs/roadmap.md), [private Access authentication](docs/cloudflare-access.md), [the Sandbox Bot setup checklist](docs/github-sandbox-app.md), and the [read-only GitHub App pilot](docs/github-pilot-readonly.md) for dependencies, release gates, and operator setup.
 
 ## Contributing and local QA
 

@@ -111,3 +111,40 @@ test('manual staging deploy never enables comments by default and requires expli
   assert.match(workflow, /GH_APP_COMMENT_PILOT_OWNER_TENANT_ID:.*secrets\./);
   assert.match(workflow, /APPROVE_VERIFIED_CONFIG_OVERRIDE/);
 });
+
+test('second sandbox App secret is optional and permitted only as a protected binding', () => {
+  for (const phase of ['before', 'after']) {
+    const withoutSandbox = fixture(phase);
+    verifyStagingSettings(withoutSandbox, env, phase);
+    const withSandbox = fixture(phase);
+    withSandbox.result.bindings.push({ name: 'GH_APP_SANDBOX_PRIVATE_KEY', type: 'secret_text' });
+    verifyStagingSettings(withSandbox, env, phase);
+
+    const wrongType = fixture(phase);
+    wrongType.result.bindings.push(binding('GH_APP_SANDBOX_PRIVATE_KEY', 'not-a-real-key'));
+    assert.throws(
+      () => verifyStagingSettings(wrongType, env, phase),
+      error => error.message === 'Sandbox App private-key secret binding has wrong type',
+    );
+
+    const unapproved = fixture(phase);
+    unapproved.result.bindings.push({ name: 'GH_APP_UNKNOWN_PRIVATE_KEY', type: 'secret_text' });
+    assert.throws(
+      () => verifyStagingSettings(unapproved, env, phase),
+      error => error.message === 'Unexpected staging binding names',
+    );
+  }
+  // Historical pre-pilot deployment with a pre-installed Sandbox key is
+  // accepted as a 'before' state, not as a post-deployment final state.
+  const legacyWithSandbox = fixture('before');
+  legacyWithSandbox.result.bindings.push({ name: 'GH_APP_SANDBOX_PRIVATE_KEY', type: 'secret_text' });
+  verifyStagingSettings(legacyWithSandbox, env, 'before');
+  assert.throws(() => verifyStagingSettings(legacyWithSandbox, env, 'after'));
+});
+
+test('post-deploy binding inspection still requires Designer key when Sandbox is installed', () => {
+  const x = fixture('after');
+  x.result.bindings.push({ name: 'GH_APP_SANDBOX_PRIVATE_KEY', type: 'secret_text' });
+  x.result.bindings.splice(x.result.bindings.findIndex(b => b.name === 'GH_APP_DESIGN_PRIVATE_KEY'), 1);
+  assert.throws(() => verifyStagingSettings(x, env, 'after'));
+});
