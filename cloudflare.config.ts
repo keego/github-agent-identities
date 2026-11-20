@@ -35,6 +35,11 @@ export default defineConfig(({ mode }) => {
         ALLOWED_ACCESS_EMAILS: bindings.text(process.env.ALLOWED_ACCESS_EMAILS || ""),
         // Must be explicitly enabled after authenticated staging and App setup.
         GH_APP_READONLY_ENABLED: bindings.text(process.env.GH_APP_READONLY_ENABLED === "true" ? "true" : "false"),
+        // Separately approved one-owner/one-target staging comment pilot.
+        GH_APP_COMMENT_PILOT_ENABLED: bindings.text(process.env.GH_APP_COMMENT_PILOT_ENABLED === "true" ? "true" : "false"),
+        GH_APP_COMMENT_PILOT_OWNER_TENANT_ID: bindings.text(process.env.GH_APP_COMMENT_PILOT_OWNER_TENANT_ID || ""),
+        GH_APP_COMMENT_PILOT_REPOSITORY: bindings.text(process.env.GH_APP_COMMENT_PILOT_REPOSITORY || ""),
+        GH_APP_COMMENT_PILOT_NUMBER: bindings.text(process.env.GH_APP_COMMENT_PILOT_NUMBER || ""),
       },
     },
   };
