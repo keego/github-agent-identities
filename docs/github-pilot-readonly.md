@@ -63,6 +63,8 @@ To rotate the key, replace the Worker secret through the protected Cloudflare se
 
 ## Read-only pilot diagnostics (sanitized)
 
+GitHub-generated App keys are PKCS#1, while the WebCrypto signer accepts PKCS#8. The Worker converts a valid RSA private key **in memory** before calling Octokit and never writes the converted PEM to D1, GitHub Actions or logs. A malformed or non-RSA key fails with a fixed error code; the operator must correct the Cloudflare secret privately. <https://github.com/gr2m/universal-github-app-jwt#about-private-key-formats>
+
 If the authenticated, bound `github_get_pull_request` tool returns an error, record **only** the fixed error code (and PR number), never a PEM, JWT, installation token, Access assertion, or upstream error body.
 
 | Code | Safe interpretation | Operator follow-up |
@@ -71,7 +73,8 @@ If the authenticated, bound `github_get_pull_request` tool returns an error, rec
 | `REPOSITORY_NOT_ALLOWED` | Repository not on this identity's allowlist | Verify intended authorization in the operator-owned registry |
 | `APP_NOT_CONFIGURED` / `APP_REGISTRY_FAILED` | App entry missing or scoped D1 retrieval failed | Inspect the authenticated tenant's registry row and D1 health |
 | `APP_SECRET_REF_INVALID` / `APP_SECRET_UNAVAILABLE` | Secret reference invalid or Worker key binding unavailable | Verify secret **name/type** in Cloudflare; never read the value into chat |
-| `APP_JWT_SIGNING_FAILED` | Local App JWT signing or PEM parsing failed | Confirm the secret is a valid GitHub-generated App PEM for the selected App and the Worker runtime supports signing |
+| `APP_KEY_FORMAT_INVALID` | The Worker could not parse the secret as an RSA private key or normalize it to PKCS#8 | Check that Cloudflare stores the complete GitHub-generated PEM, including both delimiters; never paste its contents into chat or logs |
+| `APP_JWT_SIGNING_FAILED` | The key was parsed and normalized, but local App JWT signing still failed | Investigate Worker crypto compatibility, not installation permissions |
 | `APP_INSTALLATION_TOKEN_FAILED` | Local signing passed, but GitHub installation-token exchange did not complete | Verify App ID, installation ID, installation status, and GitHub access; do not assume repo permissions without checking |
 | `APP_TOKEN_INVALID` | Token exchange returned an unusable or expiring token | Recheck installation exchange and token lifetime |
 | `GITHUB_REQUEST_FAILED` | Installation token was acquired but subsequent GitHub API PR request failed | Check installation's repository selection and Pull requests permission; GitHub HTTP response bodies stay private |

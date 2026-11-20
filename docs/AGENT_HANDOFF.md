@@ -65,3 +65,10 @@ Read [`AGENTS.md`](../AGENTS.md) first. Then verify the issue/PR/deployment stat
 - The staging configuration, D1 identity record and chat binding were independently verified. The generic error was **not enough to determine the actual failed stage**; `github-mcp.ts` masks unexpected errors, including authentication errors thrown as plain `Error` by `github-auth.ts`.
 - Introduce **sanitized, typed stage errors** for missing Worker secret, local App-JWT signing, GitHub installation-token exchange, invalid token, and App registry retrieval. Preserve no-sensitive-data-in-tool-output behavior; do not expose JWTs/PEMs/tokens, raw GitHub responses or user emails.
 - Next: merge/test diagnostic change, deploy with reviewed read-only path, re-run the bound PR #22 read. Confirm installation/repository access if the stage is installation exchange or GitHub HTTP. Do not treat #17 or #16 as complete.
+
+
+## November 20 — PKCS#1 signing compatibility (PR #35)
+
+- The first live bound `github_get_pull_request` attempt after PR #34 returned `APP_JWT_SIGNING_FAILED`, **before installation-token exchange**. This narrows the observed failure to local signing, not GitHub repository authorization.
+- GitHub provides App private keys as PKCS#1 PEM, while WebCrypto requires PKCS#8. The Worker bundle's crypto module selection can differ from Node unit tests. Introduce an in-memory PEM normalization/conversion with `node:crypto.createPrivateKey`, validate RSA, and preserve sanitized error handling (`APP_KEY_FORMAT_INVALID` vs `APP_JWT_SIGNING_FAILED`). Never expose the PEM/JWT.
+- Add synthetic PKCS#1→PKCS#8/WebCrypto signing tests and a Miniflare Worker crypto check. Next: independent CI, then manual staging deploy if reviewed; retry bound PR #22 read and record the actual result. Do not assume this is the root cause until the live test passes.
